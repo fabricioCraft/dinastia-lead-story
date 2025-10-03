@@ -4,8 +4,9 @@ import { ChapterHeader } from "@/components/ChapterHeader";
 import { LeadsByChannelChart } from "@/components/charts/LeadsByChannelChart";
 import { FunnelChart } from "@/components/charts/FunnelChart";
 import { TimePerStageChart } from "@/components/charts/TimePerStageChart";
-import { LeadEvolutionChart } from "@/components/charts/LeadEvolutionChart";
+import { ChannelPerformanceTable } from "@/components/charts/ChannelPerformanceTable";
 import { LossReasonsChart } from "@/components/charts/LossReasonsChart";
+import { Card } from "@/components/ui/card";
 
 const Index = () => {
   return (
@@ -67,11 +68,17 @@ const Index = () => {
             <ChapterHeader
               number={2}
               title="O Caminho Pelo Funil"
-              description="Acompanhe o fluxo, velocidade e gargalos na jornada de conversão"
+              description="Visualize o fluxo dos seus leads e a velocidade em que eles se movem entre as etapas."
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <FunnelChart />
-              <TimePerStageChart />
+              <div className="space-y-6">
+                <TimePerStageChart />
+                <Card className="p-6 card-glow border-border/50">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Ciclo de Vendas Médio</p>
+                  <p className="text-4xl font-bold gradient-text">27 dias</p>
+                </Card>
+              </div>
             </div>
           </section>
 
@@ -79,11 +86,11 @@ const Index = () => {
           <section className="space-y-6">
             <ChapterHeader
               number={3}
-              title="O Resultado da Jornada"
-              description="Analise ganhos, perdas e oportunidades de melhoria"
+              title="O Destino Final: Ganhos, Perdas e Porquês"
+              description="Entenda o resultado final da jornada e aprenda com os negócios perdidos para otimizar o futuro."
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <LeadEvolutionChart />
+              <ChannelPerformanceTable />
               <LossReasonsChart />
             </div>
           </section>
