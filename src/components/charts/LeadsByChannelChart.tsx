@@ -1,12 +1,14 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Trophy } from "lucide-react";
+import { TooltipProvider, Tooltip as UITooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 const data = [
-  { name: "Google Ads", value: 450 },
-  { name: "Meta Ads", value: 320 },
-  { name: "Busca Orgânica", value: 280 },
-  { name: "LinkedIn", value: 150 },
-  { name: "Outros", value: 50 },
+  { name: "Google Ads", value: 450, bestPerformer: false },
+  { name: "Meta Ads", value: 320, bestPerformer: false },
+  { name: "Busca Orgânica", value: 280, bestPerformer: true },
+  { name: "LinkedIn", value: 150, bestPerformer: false },
+  { name: "Outros", value: 50, bestPerformer: false },
 ];
 
 const COLORS = [
@@ -34,21 +36,46 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 export function LeadsByChannelChart() {
   return (
-    <Card className="p-6 card-glow border-border/50">
+    <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-6">Origem dos Leads por Canal</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-          <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-          <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.2 }} />
-          <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="relative">
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+            <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
+            <YAxis 
+              dataKey="name" 
+              type="category" 
+              stroke="hsl(var(--muted-foreground))"
+              width={140}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.2 }} />
+            <Bar dataKey="value" radius={[0, 8, 8, 0]} className="transition-all duration-300">
+              {data.map((entry, index) => (
+                <Cell 
+                  key={`cell-${index}`} 
+                  fill={COLORS[index % COLORS.length]}
+                  className="hover:opacity-80 transition-opacity duration-200"
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        
+        {/* Trophy Icon with Tooltip for Best Performer */}
+        <TooltipProvider>
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <div className="absolute left-[125px] top-[165px] cursor-help">
+                <Trophy className="w-4 h-4 text-accent animate-pulse" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs font-semibold">Melhor Performance: Maior Taxa de Conversão (12.5%)</p>
+            </TooltipContent>
+          </UITooltip>
+        </TooltipProvider>
+      </div>
     </Card>
   );
 }

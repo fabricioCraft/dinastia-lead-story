@@ -26,7 +26,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 
 export function TimePerStageChart() {
   return (
-    <Card className="p-6 card-glow border-border/50">
+    <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-4">Velocidade da Jornada: Tempo Médio por Etapa</h3>
       <p className="text-sm text-muted-foreground mb-6">Onde Estão Nossos Gargalos de Tempo?</p>
       <ResponsiveContainer width="100%" height={300}>
@@ -35,9 +35,13 @@ export function TimePerStageChart() {
           <XAxis dataKey="stage" stroke="hsl(var(--muted-foreground))" angle={-15} textAnchor="end" height={80} />
           <YAxis stroke="hsl(var(--muted-foreground))" label={{ value: "Dias", angle: -90, position: "insideLeft" }} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.2 }} />
-          <Bar dataKey="days" radius={[8, 8, 0, 0]}>
+          <Bar dataKey="days" radius={[8, 8, 0, 0]} className="transition-all duration-300">
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
+              <Cell 
+                key={`cell-${index}`} 
+                fill={entry.color}
+                className="hover:opacity-80 transition-opacity duration-200"
+              />
             ))}
           </Bar>
         </BarChart>

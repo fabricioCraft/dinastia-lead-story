@@ -11,7 +11,7 @@ interface KpiCardProps {
 
 export function KpiCard({ title, value, subtitle, trend, className }: KpiCardProps) {
   return (
-    <Card className={cn("p-6 card-glow border-border/50", className)}>
+    <Card className={cn("p-6 card-glow border-border/50 hover:scale-[1.02] hover:shadow-lg transition-all duration-300", className)}>
       <div className="space-y-2">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         <p className="text-3xl font-bold gradient-text">{value}</p>

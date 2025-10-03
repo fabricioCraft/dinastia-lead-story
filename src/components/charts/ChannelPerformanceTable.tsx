@@ -11,7 +11,7 @@ const data = [
 
 export function ChannelPerformanceTable() {
   return (
-    <Card className="p-6 card-glow border-border/50">
+    <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-6">Performance de Conversão por Canal</h3>
       <Table>
         <TableHeader>
@@ -27,6 +27,7 @@ export function ChannelPerformanceTable() {
             <TableRow
               key={row.channel}
               className={cn(
+                "transition-all duration-200 hover:scale-[1.01]",
                 row.highlight && "bg-accent/10 hover:bg-accent/20 border-l-2 border-accent"
               )}
             >

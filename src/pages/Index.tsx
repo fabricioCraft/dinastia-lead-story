@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/Sidebar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChapterHeader } from "@/components/ChapterHeader";
+import { InsightCard } from "@/components/InsightCard";
 import { LeadsByChannelChart } from "@/components/charts/LeadsByChannelChart";
 import { FunnelChart } from "@/components/charts/FunnelChart";
 import { TimePerStageChart } from "@/components/charts/TimePerStageChart";
@@ -53,6 +54,26 @@ const Index = () => {
             />
           </div>
 
+          {/* Insights da IA Dinastia */}
+          <section className="space-y-4">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-1 w-12 bg-gradient-to-r from-accent to-primary rounded-full"></div>
+              <h2 className="text-2xl font-bold gradient-text">Insights da IA Dinastia</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <InsightCard
+                title="Oportunidade de Otimização"
+                description="A etapa de MQL para Agendamento está levando 8 dias. Sugerimos revisar o processo de follow-up para acelerar o ciclo de vendas."
+                variant="warning"
+              />
+              <InsightCard
+                title="Ponto de Atenção"
+                description="40% dos leads são perdidos por Falta de Resposta. Sugerimos implementar um fluxo de nutrição automatizado para reengajar esses contatos."
+                variant="info"
+              />
+            </div>
+          </section>
+
           {/* Capítulo 1 */}
           <section className="space-y-6">
             <ChapterHeader
@@ -98,7 +119,7 @@ const Index = () => {
           {/* Footer */}
           <div className="pt-8 pb-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Dashboard gerado por Dinastia • Dados atualizados em tempo real
+              Última atualização: 03/10/2025, 15:42 | Dashboard gerado por Dinastia
             </p>
           </div>
         </div>

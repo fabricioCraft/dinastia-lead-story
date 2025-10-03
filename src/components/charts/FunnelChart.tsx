@@ -10,7 +10,7 @@ const funnelData = [
 
 export function FunnelChart() {
   return (
-    <Card className="p-6 card-glow border-border/50">
+    <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-6">Funil de Vendas Interativo</h3>
       <div className="space-y-2">
         {funnelData.map((item, index) => (
@@ -19,7 +19,7 @@ export function FunnelChart() {
             className="group relative transition-all duration-300 hover:scale-[1.02]"
           >
             <div
-              className="h-16 flex items-center justify-between px-6 rounded-lg transition-all duration-300 hover:shadow-lg"
+              className="h-16 flex items-center justify-between px-6 rounded-lg transition-all duration-300 hover:shadow-lg cursor-pointer"
               style={{
                 width: `${item.percentage}%`,
                 backgroundColor: item.color,

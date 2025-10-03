@@ -50,7 +50,7 @@ const renderCustomizedLabel = ({
 
 export function LossReasonsChart() {
   return (
-    <Card className="p-6 card-glow border-border/50">
+    <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-6">Principais Motivos de Perda</h3>
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
@@ -64,9 +64,14 @@ export function LossReasonsChart() {
             innerRadius={60}
             fill="#8884d8"
             dataKey="value"
+            className="transition-all duration-300"
           >
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
+              <Cell 
+                key={`cell-${index}`} 
+                fill={entry.color}
+                className="hover:opacity-80 transition-opacity duration-200 cursor-pointer"
+              />
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} />
