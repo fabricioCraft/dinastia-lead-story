@@ -41,7 +41,7 @@ export function Sidebar({ className }: SidebarProps) {
                   >
                     <Icon className="w-5 h-5" />
                     {item.label === "Alertas" && (
-                      <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-accent text-accent-foreground border-0 text-xs font-semibold">
+                      <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-cyan-500 text-white border-0 text-xs font-semibold">
                         2
                       </Badge>
                     )}

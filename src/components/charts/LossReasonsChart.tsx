@@ -39,7 +39,7 @@ const renderCustomizedLabel = ({
       x={x}
       y={y}
       fill="white"
-      textAnchor={x > cx ? "start" : "end"}
+      textAnchor="middle"
       dominantBaseline="central"
       className="font-bold text-sm"
     >
@@ -70,7 +70,7 @@ export function LossReasonsChart() {
               <Cell 
                 key={`cell-${index}`} 
                 fill={entry.color}
-                className="hover:opacity-80 transition-opacity duration-200 cursor-pointer"
+                className="cursor-pointer transition-transform duration-200 hover:scale-[1.05] hover:brightness-110"
               />
             ))}
           </Pie>

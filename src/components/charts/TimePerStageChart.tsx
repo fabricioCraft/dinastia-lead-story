@@ -40,7 +40,7 @@ export function TimePerStageChart() {
               <Cell 
                 key={`cell-${index}`} 
                 fill={entry.color}
-                className="hover:opacity-80 transition-opacity duration-200"
+                className="hover:opacity-90 transition-transform duration-200 hover:scale-[1.02] hover:brightness-110 cursor-pointer"
               />
             ))}
           </Bar>
