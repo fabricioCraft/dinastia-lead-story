@@ -13,7 +13,8 @@
     "strictNullChecks": true,
     "skipLibCheck": true,
     "moduleResolution": "node",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "composite": true
   },
   "include": ["src"]
 }

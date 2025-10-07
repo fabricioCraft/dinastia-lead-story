@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ClickUpService } from '../services/clickup.service';
 import { SupabaseService } from '../services/supabase.service';
 
 export interface EnrichedLead {
@@ -9,68 +8,85 @@ export interface EnrichedLead {
   origin: string | null;
 }
 
+export interface StageSummaryItem {
+  stage: string;
+  count: number;
+}
+
+export interface TimeInStageItem {
+  stage: string;
+  averageTimeInDays: number;
+}
+
+export interface OriginSummaryItem {
+  origin: string;
+  count: number;
+}
+
 @Injectable()
 export class FunnelService {
-  // Cache em memória (server-side) para evitar expor dados no navegador
-  private cache: { data: EnrichedLead[]; timestamp: number } | null = null;
-  private readonly ttlMs = Number(process.env.FUNNEL_CACHE_TTL_MS ?? 300000); // default 5 min
-  // Promessa em andamento para evitar múltiplos cálculos concorrentes
-  private ongoing: Promise<EnrichedLead[]> | null = null;
+  constructor(private supabase: SupabaseService) {}
 
-  constructor(
-    private clickup: ClickUpService,
-    private supabase: SupabaseService,
-  ) {}
-
-  private async compute(): Promise<EnrichedLead[]> {
-    const listId = process.env.CLICKUP_LIST_ID;
-    if (!listId) {
-      throw new Error('CLICKUP_LIST_ID not configured');
-    }
-    const tasks = await this.clickup.getTasksFromList(listId);
-    // Inclui TODOS os estágios do pipeline; não filtramos por status.
-    const ids = tasks.map((t: any) => t.id);
-    // Origem dos leads é obtida exclusivamente do Supabase (tabela leads2), pela coluna 'origem', vinculando pelo 'clickupid'.
-    const originMap = await this.supabase.findOriginsByClickupIds(ids);
-    const enriched = tasks.map((t: any) => ({
-      id: t.id,
-      name: t.name,
-      status: t.status?.status ?? t.status ?? '',
-      origin: originMap[t.id] ?? null,
+  /**
+   * Retorna resumo dos leads por estágio do funil
+   * Utiliza dados da tabela kommo_leads_snapshot
+   */
+  async getStagesSummary(days?: number): Promise<StageSummaryItem[]> {
+    const rows = await this.supabase.aggregateKommoLeadsByStatus(days);
+    if (!rows || rows.length === 0) return [];
+    
+    const summary: StageSummaryItem[] = rows.map((r) => ({ 
+      stage: r.status ?? '', 
+      count: Number(r.count ?? 0) 
     }));
-    // Atualiza cache
-    this.cache = { data: enriched, timestamp: Date.now() };
-    return enriched;
+    
+    // Ordenação alfabética para estabilidade
+    summary.sort((a, b) => a.stage.localeCompare(b.stage));
+    return summary;
   }
 
-  // Método original continua existindo para compatibilidade
-  async getSummary(): Promise<EnrichedLead[]> {
-    return this.compute();
+  /**
+   * Retorna resumo dos leads por origem
+   * Utiliza dados da tabela kommo_leads_snapshot
+   */
+  async getOriginSummary(days?: number): Promise<OriginSummaryItem[]> {
+    const rows = await this.supabase.aggregateKommoLeadsByOrigin(days);
+    if (!rows || rows.length === 0) return [];
+    
+    const summary: OriginSummaryItem[] = rows.map((r) => ({ 
+      origin: r.origin ?? 'Sem origem', 
+      count: Number(r.count ?? 0) 
+    }));
+    
+    // Ordenação alfabética para estabilidade
+    summary.sort((a, b) => a.origin.localeCompare(b.origin));
+    return summary;
   }
 
-  // Método com cache e fallback de worker (timeout padrão 5s)
-  async getSummaryCachedFallback(timeoutMs = 5000): Promise<EnrichedLead[]> {
-    const now = Date.now();
-    // Se cache fresco, retorna imediatamente
-    if (this.cache && now - this.cache.timestamp < this.ttlMs) {
-      return this.cache.data;
-    }
-    // Inicia computação se não houver uma em andamento
-    if (!this.ongoing) {
-      this.ongoing = this.compute().finally(() => {
-        this.ongoing = null;
-      });
-    }
-    // Espera no máximo timeoutMs pela computação. Se estourar o tempo, retorna cache antigo (stale) ou vazio.
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
-    const result = await Promise.race([this.ongoing, timeoutPromise]);
-    if (Array.isArray(result)) {
-      return result as EnrichedLead[];
-    }
-    // Timeout: retorna cache antigo se existir, caso contrário, retorna lista vazia
-    if (this.cache) {
-      return this.cache.data;
-    }
+  /**
+   * Retorna tempo médio em cada estágio do funil
+   * Calcula baseado nos dados históricos da tabela lead_stage_durations
+   */
+  async getTimeInStage(days?: number): Promise<TimeInStageItem[]> {
+    const rows = await this.supabase.getAverageTimeInStageFromDurations();
+    if (!rows || rows.length === 0) return [];
+    
+    const timeInStage: TimeInStageItem[] = rows.map((r) => ({
+      stage: r.stage_name ?? '',
+      averageTimeInDays: Number(r.avg_duration_seconds ?? 0) / (24 * 60 * 60) // Converter segundos para dias
+    }));
+    
+    // Ordenação alfabética para estabilidade
+    timeInStage.sort((a, b) => a.stage.localeCompare(b.stage));
+    return timeInStage;
+  }
+
+  /**
+   * Método legado mantido para compatibilidade
+   * @deprecated Use getStagesSummary() instead
+   */
+  async getSummary(days?: number): Promise<EnrichedLead[]> {
+    // Retorna array vazio por enquanto, será implementado quando necessário
     return [];
   }
 }

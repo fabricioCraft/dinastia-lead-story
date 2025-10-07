@@ -1,38 +1,45 @@
 import { Sidebar } from "@/components/Sidebar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChapterHeader } from "@/components/ChapterHeader";
-import { InsightCard } from "@/components/InsightCard";
 import { LeadsByChannelChart } from "@/components/charts/LeadsByChannelChart";
-import { FunnelChart } from "@/components/charts/FunnelChart";
+import { InteractiveFunnelChart } from "@/components/charts/InteractiveFunnelChart";
 import { TimePerStageChart } from "@/components/charts/TimePerStageChart";
 import { ChannelPerformanceTable } from "@/components/charts/ChannelPerformanceTable";
-import { LossReasonsChart } from "@/components/charts/LossReasonsChart";
 import { Card } from "@/components/ui/card";
+import PeriodSelector from "@/components/PeriodSelector";
+import { useDashboardData } from "@/hooks/useDashboardData";
 
 const Index = () => {
+  const { data: dashboardData, isLoading, error } = useDashboardData();
+
   return (
     <div className="flex min-h-screen w-full bg-background">
-      <Sidebar />
+      {/* <Sidebar /> */}
       
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-12">
           {/* Header */}
           <div className="mb-12">
-            <h1 className="text-4xl font-bold gradient-text mb-2">
-              Jornada do Lead Dinastia
-            </h1>
-            <p className="text-muted-foreground text-lg">
-              Transformando dados em histórias de sucesso
-            </p>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h1 className="text-4xl font-bold gradient-text mb-2">
+                  Jornada do Lead Dinastia
+                </h1>
+                <p className="text-muted-foreground text-lg">
+                  Transformando dados em histórias de sucesso
+                </p>
+              </div>
+              <PeriodSelector />
+            </div>
           </div>
 
           {/* KPIs principais */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <KpiCard
-              title="Total de Leads (Mês)"
-              value="1.250"
-              subtitle="+18% vs mês anterior"
-              trend="up"
+              title="Total de Leads"
+              value={isLoading ? "..." : (dashboardData?.kpis.totalLeads || 0).toLocaleString('pt-BR')}
+              subtitle={error ? "Erro ao carregar" : "Período selecionado"}
+              trend={error ? "down" : "neutral"}
             />
             <KpiCard
               title="Taxa de Qualificação (MQL)"
@@ -54,25 +61,6 @@ const Index = () => {
             />
           </div>
 
-          {/* Insights da IA Dinastia */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-1 w-12 bg-gradient-to-r from-accent to-primary rounded-full"></div>
-              <h2 className="text-2xl font-bold gradient-text">Insights da IA Dinastia</h2>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <InsightCard
-                title="Oportunidade de Otimização"
-                description="A etapa de MQL para Agendamento está levando 8 dias. Sugerimos revisar o processo de follow-up para acelerar o ciclo de vendas."
-                variant="warning"
-              />
-              <InsightCard
-                title="Ponto de Atenção"
-                description="40% dos leads são perdidos por Falta de Resposta. Sugerimos implementar um fluxo de nutrição automatizado para reengajar esses contatos."
-                variant="info"
-              />
-            </div>
-          </section>
 
           {/* Capítulo 1 */}
           <section className="space-y-6">
@@ -92,7 +80,7 @@ const Index = () => {
               description="Visualize o fluxo dos seus leads e a velocidade em que eles se movem entre as etapas."
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <FunnelChart />
+              <InteractiveFunnelChart />
               <div className="space-y-6">
                 <TimePerStageChart />
                 <Card className="p-6 card-glow border-border/50">
@@ -110,9 +98,8 @@ const Index = () => {
               title="O Destino Final: Ganhos, Perdas e Porquês"
               description="Entenda o resultado final da jornada e aprenda com os negócios perdidos para otimizar o futuro."
             />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <ChannelPerformanceTable />
-              <LossReasonsChart />
             </div>
           </section>
 

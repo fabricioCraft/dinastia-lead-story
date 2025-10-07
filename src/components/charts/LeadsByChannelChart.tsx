@@ -1,8 +1,10 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { Trophy } from "lucide-react";
-import { TooltipProvider, Tooltip as UITooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+
 import { useQuery } from "@tanstack/react-query";
+import { BarChartSkeleton } from "./BarChartSkeleton";
+import { usePeriod } from "@/contexts/PeriodContext";
+import React from "react";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -31,24 +33,28 @@ function canonicalizeOrigin(raw: string | null): string {
   return canonical;
 }
 
-function useLeadsByOrigin() {
+function useLeadsByOrigin(days: number | null) {
   return useQuery<{ name: string; value: number }[], Error>({
-    queryKey: ["leads-by-origin"],
+    queryKey: ["leads-by-origin", days],
     queryFn: async () => {
-      const res = await fetch("http://localhost:3001/funnel/summary", {
+      const url = days 
+        ? `/api/dashboard/origin-summary?days=${days}`
+        : "/api/dashboard/origin-summary";
+      const res = await fetch(url, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error("Falha ao carregar dados");
-      const items: Array<{ origin: string | null }> = await res.json();
+      const payload: {
+        kpis: { totalLeads: number };
+        leadsByOrigin: Array<{ origem: string | null; count: number }>;
+      } = await res.json();
 
-      // 1) Conta por origem canônica (caixa alta + sinônimos)
       const counts = new Map<string, number>();
-      for (const item of items) {
-        const key = canonicalizeOrigin(item.origin);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+      for (const item of payload.leadsByOrigin) {
+        const key = canonicalizeOrigin(item.origem);
+        counts.set(key, (counts.get(key) ?? 0) + Number(item.count ?? 0));
       }
 
-      // 2) Agrupa origens com poucos leads em OUTROS
       let others = counts.get("OUTROS") ?? 0;
       for (const [name, value] of Array.from(counts.entries())) {
         if (name === "OUTROS") continue;
@@ -82,7 +88,8 @@ const CustomTooltip = ({ active, payload, total }: any) => {
 };
 
 export function LeadsByChannelChart() {
-  const { data, isLoading, error } = useLeadsByOrigin();
+  const { selectedPeriod } = usePeriod();
+  const { data, isLoading, error } = useLeadsByOrigin(selectedPeriod);
   const total = (data ?? []).reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -90,7 +97,9 @@ export function LeadsByChannelChart() {
       <h3 className="text-lg font-semibold text-foreground mb-6">Origem dos Leads por Canal</h3>
       <div className="relative">
         {isLoading && (
-          <div className="text-sm text-muted-foreground">Carregando dados reais...</div>
+          <div className="mb-4">
+            <BarChartSkeleton />
+          </div>
         )}
         {error && (
           <div className="text-sm text-red-600">Erro ao carregar: {error.message}</div>
@@ -119,20 +128,6 @@ export function LeadsByChannelChart() {
             </BarChart>
           </ResponsiveContainer>
         )}
-        
-        {/* Trophy Icon with Tooltip for Best Performer */}
-        <TooltipProvider>
-          <UITooltip>
-            <TooltipTrigger asChild>
-              <div className="absolute left-[125px] top-[165px] cursor-help">
-                <Trophy className="w-4 h-4 text-accent animate-pulse" />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs font-semibold">Melhor Performance: maior participação no total de leads</p>
-            </TooltipContent>
-          </UITooltip>
-        </TooltipProvider>
       </div>
     </Card>
   );
