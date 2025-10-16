@@ -1,65 +1,71 @@
-import { Controller, Get, Query, Res, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, UseInterceptors } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL, CacheKey } from '@nestjs/cache-manager';
-import { Response } from 'express';
-import { FunnelService, StageSummaryItem, TimeInStageItem, OriginSummaryItem } from './funnel.service';
+import { FunnelService, StageSummaryItem, TimeInStageItem } from './funnel.service';
+import { SupabaseService } from '../services/supabase.service';
 
 @Controller('funnel')
 export class FunnelController {
-  constructor(private readonly funnelService: FunnelService) {}
-
-  @Get('summary')
-  async getSummary(@Res() res: Response, @Query('days') days?: string) {
-    // Evita cache no navegador (os dados não devem ficar expostos via cache do browser)
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    // Aguarda cálculo completo para garantir retorno de dados reais
-    const d = days ? Number(days) : undefined;
-    const data = await this.funnelService.getSummary(d);
-    return res.json(data);
-  }
-
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey('funnel-origin-summary')
-  @CacheTTL(300) // 5 minutos
-  @Get('origin-summary')
-  async getOriginSummary(@Query('days') days?: string): Promise<OriginSummaryItem[]> {
-    try {
-      const d = days ? Number(days) : undefined;
-      const data = await this.funnelService.getOriginSummary(d);
-      return data;
-    } catch (err) {
-      return [];
-    }
-  }
+  constructor(
+    private readonly funnelService: FunnelService,
+    private readonly supabaseService: SupabaseService
+  ) {}
 
   @UseInterceptors(CacheInterceptor)
   @CacheKey('funnel-stages-summary')
-  @CacheTTL(60)
+  @CacheTTL(21600) // 6 horas - cache alinhado com sincronização bi-diária (7h e 14h BRT)
   @Get('stages-summary')
-  async getStagesSummary(@Query('days') days?: string): Promise<StageSummaryItem[]> {
+  async getStagesSummary(): Promise<StageSummaryItem[]> {
     try {
-      const d = days ? Number(days) : undefined;
-      const data = await this.funnelService.getStagesSummary(d);
+      const data = await this.funnelService.getStagesSummary();
       return data;
     } catch (err) {
+      console.error('Error in getStagesSummary endpoint:', err);
       return [];
     }
   }
 
   @UseInterceptors(CacheInterceptor)
   @CacheKey('funnel-time-in-stage')
-  @CacheTTL(300) // 5 minutos
+  @CacheTTL(21600) // 6 horas - cache alinhado com sincronização bi-diária (7h e 14h BRT)
   @Get('time-in-stage')
-  async getTimeInStage(@Query('days') days?: string): Promise<TimeInStageItem[]> {
+  async getTimeInStage(): Promise<TimeInStageItem[]> {
     try {
-      const d = days ? Number(days) : undefined;
-      const data = await this.funnelService.getTimeInStage(d);
+      const data = await this.funnelService.getTimeInStage();
       return data;
     } catch (err) {
+      console.error('Error in getTimeInStage endpoint:', err);
       return [];
     }
   }
 
-  // Endpoint removido - seed do ClickUp não é mais necessário
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey('funnel-scheduling-rate')
+  @CacheTTL(21600) // 6 horas - cache alinhado com sincronização bi-diária (7h e 14h BRT)
+  @Get('scheduling-rate')
+  async getSchedulingRate(): Promise<{ schedulingRate: number }> {
+    try {
+      const data = await this.funnelService.getSchedulingRate();
+      return data;
+    } catch (err) {
+      console.error('Error in getSchedulingRate endpoint:', err);
+      return { schedulingRate: 0 };
+    }
+  }
+
+  @Get('check-table')
+  async checkTable() {
+    try {
+      const result = await this.supabaseService.checkKommoLeadsSnapshotTable();
+      return {
+        success: true,
+        tableInfo: result
+      };
+    } catch (error) {
+      console.error('Error checking kommo_leads_snapshot table:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }

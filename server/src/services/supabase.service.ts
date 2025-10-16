@@ -12,628 +12,578 @@ export class SupabaseService {
     }
   }
 
-  // Amostra de dados para depuração
-  async fetchSample(limit = 10): Promise<any[]> {
-    if (!this.client) return [];
-    const { data, error } = await this.client
-      .from('leads2')
-      .select('chatid, origem, utm_campaign')
-      .order('chatid', { ascending: true })
-      .limit(limit);
-    if (error) {
-      console.error('Supabase fetchSample error:', error.message);
-      return [];
-    }
-    return (data as any[]) ?? [];
+  /**
+   * Retorna o cliente Supabase para uso direto
+   */
+  getClient(): SupabaseClient | null {
+    return this.client;
   }
-
-  async findOriginsByClickupIds(ids: string[]): Promise<Record<string, string>> {
-    if (!this.client || ids.length === 0) return {};
-    // Consulta em lotes para evitar 414 e reduzir carga
-    const chunkSize = Number(process.env.SUPABASE_CHUNK_SIZE ?? 500);
-    const map: Record<string, string> = {};
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const { data, error } = await this.client
-        .from('leads2')
-        .select('clickupid, origem')
-        .in('clickupid', chunk);
-      if (error) {
-        console.error('Supabase error:', error.message);
-        continue;
-      }
-      for (const row of data ?? []) {
-        if ((row as any).clickupid && (row as any).origem) {
-          map[(row as any).clickupid] = (row as any).origem as string;
-        }
-      }
-    }
-    return map;
-  }
-
-  // Pré-agregação: contagem por origem
-  async aggregateLeadsByOrigin(): Promise<Array<{ origem: string | null; count: number }>> {
-    if (!this.client) return [];
-    const { data, error } = await this.client
-      .from('kommo_leads_snapshot')
-      .select('origin, count:count()');
-    const rows = !error ? ((data as any[]) ?? []) : [];
-    if (error) {
-      console.error('Supabase aggregateLeadsByOrigin error:', error.message);
-    }
-    if (rows.length > 0) {
-      return rows.map((row) => ({ origem: row.origin ?? null, count: Number(row.count ?? 0) }));
-    }
-
-    // Fallback: agregação manual caso a função de agregação esteja desabilitada
-    try {
-      const total = await this.getTotalKommoLeads();
-      if (total <= 0) return [];
-      const counts = new Map<string | null, number>();
-      const chunkSize = Number(process.env.SUPABASE_FALLBACK_CHUNK_SIZE ?? 1000);
-      for (let from = 0; from < total; from += chunkSize) {
-        const to = Math.min(from + chunkSize - 1, total - 1);
-        const { data: page, error: pageError } = await this.client
-          .from('kommo_leads_snapshot')
-          .select('origin')
-          .order('lead_id', { ascending: true })
-          .range(from, to);
-        if (pageError) {
-          console.error('Supabase fallback aggregateLeadsByOrigin page error:', pageError.message);
-          continue;
-        }
-        for (const r of page ?? []) {
-          const key = (r as any).origin ?? null;
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-      }
-      return Array.from(counts.entries()).map(([origem, count]) => ({ origem, count }));
-    } catch (e: any) {
-      console.error('Supabase fallback aggregateLeadsByOrigin error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Pré-agregação: contagem por campanha (utm_campaign)
-  async aggregateLeadsByCampaign(): Promise<Array<{ utm_campaign: string | null; count: number }>> {
-    if (!this.client) return [];
-    const { data, error } = await this.client
-      .from('leads2')
-      .select('utm_campaign, count:count()');
-    const rows = !error ? ((data as any[]) ?? []) : [];
-    if (error) {
-      console.error('Supabase aggregateLeadsByCampaign error:', error.message);
-    }
-    if (rows.length > 0) {
-      return rows.map((row) => ({ utm_campaign: row.utm_campaign ?? null, count: Number(row.count ?? 0) }));
-    }
-
-    // Fallback: agregação manual caso a função de agregação esteja desabilitada
-    try {
-      const total = await this.getTotalLeads();
-      if (total <= 0) return [];
-      const counts = new Map<string | null, number>();
-      const chunkSize = Number(process.env.SUPABASE_FALLBACK_CHUNK_SIZE ?? 1000);
-      let campaignKey: string | null = null;
-      for (let from = 0; from < total; from += chunkSize) {
-        const to = Math.min(from + chunkSize - 1, total - 1);
-        const { data: page, error: pageError } = await this.client
-          .from('leads2')
-          .select('*')
-          .order('chatid', { ascending: true })
-          .range(from, to);
-        if (pageError) {
-          console.error('Supabase fallback aggregateLeadsByCampaign page error:', pageError.message);
-          continue;
-        }
-        if (!campaignKey && (page ?? []).length > 0) {
-          const sample = page![0] as any;
-          const preferredKeys = ['utm_campaign', 'utmcampaign', 'utmCampaign', 'campaign'];
-          campaignKey = preferredKeys.find((k) => k in sample) ?? Object.keys(sample).find((k) => /utm.*campaign/i.test(k) || /campaign/i.test(k)) ?? null;
-        }
-        for (const r of page ?? []) {
-          const key = campaignKey ? ((r as any)[campaignKey] ?? null) : ((r as any).utm_campaign ?? (r as any).utmcampaign ?? (r as any).utmCampaign ?? (r as any).campaign ?? null);
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-      }
-      return Array.from(counts.entries()).map(([utm_campaign, count]) => ({ utm_campaign, count }));
-    } catch (e: any) {
-      console.error('Supabase fallback aggregateLeadsByCampaign error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Total de leads via COUNT direto
-  async getTotalLeads(): Promise<number> {
-    if (!this.client) return 0;
-    const { count, error } = await this.client
-      .from('leads2')
-      .select('chatid', { count: 'exact', head: true });
-    if (error) {
-      console.error('Supabase getTotalLeads error:', error.message);
-      return 0;
-    }
-    return Number(count ?? 0);
-  }
-
-  async getTotalKommoLeads(): Promise<number> {
-    if (!this.client) return 0;
-    const { count, error } = await this.client
-      .from('kommo_leads_snapshot')
-      .select('lead_id', { count: 'exact', head: true });
-    if (error) {
-      console.error('Supabase getTotalKommoLeads error:', error.message);
-      return 0;
-    }
-    return Number(count ?? 0);
-  }
-
-  // Busca todos os ClickUp IDs para uma origem específica, com paginação
-  async findClickupIdsByOrigin(origin: string): Promise<string[]> {
-    if (!this.client) return [];
-    const { count, error } = await this.client
-      .from('leads2')
-      .select('chatid', { count: 'exact', head: true })
-      .eq('origem', origin);
-    if (error) {
-      console.error('Supabase findClickupIdsByOrigin count error:', error.message);
-      return [];
-    }
-    const total = Number(count ?? 0);
-    if (total <= 0) return [];
-
-    const ids: string[] = [];
-    const chunkSize = Number(process.env.SUPABASE_FALLBACK_CHUNK_SIZE ?? 1000);
-    for (let from = 0; from < total; from += chunkSize) {
-      const to = Math.min(from + chunkSize - 1, total - 1);
-      const { data: page, error: pageError } = await this.client
-        .from('leads2')
-        .select('clickupid')
-        .eq('origem', origin)
-        .order('chatid', { ascending: true })
-        .range(from, to);
-      if (pageError) {
-        console.error('Supabase findClickupIdsByOrigin page error:', pageError.message);
-        continue;
-      }
-      for (const r of page ?? []) {
-        const id = (r as any).clickupid as string | undefined;
-        if (id) ids.push(id);
-      }
-    }
-    return Array.from(new Set(ids));
-  }
-
-  // Upsert das tarefas do ClickUp no snapshot local
-  async upsertClickupTasksSnapshot(rows: Array<{ task_id: string; status: string; last_updated_at: string }>): Promise<number> {
-    if (!this.client || rows.length === 0) return 0;
-    const chunkSize = Number(process.env.SUPABASE_CHUNK_SIZE ?? 500);
-    let total = 0;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      try {
-        // Remoção prévia dos registros existentes para simular upsert sem exigir UNIQUE constraint
-        const ids = chunk.map((r) => r.task_id).filter((id) => !!id);
-        if (ids.length > 0) {
-          const { error: delError } = await this.client
-            .from('clickup_tasks_snapshot')
-            .delete()
-            .in('task_id', ids);
-          if (delError) {
-            console.error('Supabase upsertClickupTasksSnapshot delete error:', delError.message);
-          }
-        }
-        // Inserção dos registros atualizados
-        const { error: insError } = await this.client
-          .from('clickup_tasks_snapshot')
-          .insert(chunk);
-        if (insError) {
-          console.error('Supabase upsertClickupTasksSnapshot insert error:', insError.message);
-          continue;
-        }
-        total += chunk.length;
-      } catch (e: any) {
-        console.error('Supabase upsertClickupTasksSnapshot unexpected error:', e?.message ?? String(e));
-      }
-    }
-    return total;
-  }
-
-  // Agregação rápida de tarefas por status usando tabela snapshot, com filtro opcional por dias
-  async aggregateClickupTasksByStatus(days?: number): Promise<Array<{ status: string; count: number }>> {
-    if (!this.client) return [];
-    try {
-      let query = this.client
-        .from('clickup_tasks_snapshot')
-        .select('status');
-      if (days && Number.isFinite(days) && days > 0) {
-        const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('last_updated_at', threshold);
-      }
-      const { data, error } = await query;
-      if (error) {
-        console.error('Supabase aggregateClickupTasksByStatus error:', error.message);
-        return [];
-      }
-      const rows = (data as any[]) ?? [];
-      const counts = new Map<string, number>();
-      for (const r of rows) {
-        const s = (r as any).status ?? '';
-        if (!s) continue;
-        counts.set(s, (counts.get(s) ?? 0) + 1);
-      }
-      return Array.from(counts.entries()).map(([status, count]) => ({ status, count }));
-    } catch (e: any) {
-      console.error('Supabase aggregateClickupTasksByStatus error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Retorna IDs recentes de tarefas do ClickUp no snapshot considerando o período (dias)
-  async getRecentClickupTaskIds(days: number): Promise<string[]> {
-    if (!this.client || !days || !Number.isFinite(days) || days <= 0) return [];
-    try {
-      const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await this.client
-        .from('clickup_tasks_snapshot')
-        .select('task_id')
-        .gte('last_updated_at', threshold);
-      if (error) {
-        console.error('Supabase getRecentClickupTaskIds error:', error.message);
-        return [];
-      }
-      const ids = (data ?? []).map((r: any) => r.task_id).filter((x: any) => !!x);
-      return Array.from(new Set(ids));
-    } catch (e: any) {
-      console.error('Supabase getRecentClickupTaskIds error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Agrega origens para um conjunto de ClickUp IDs
-  async aggregateOriginsForClickupIds(ids: string[]): Promise<Array<{ origem: string | null; count: number }>> {
-    if (!this.client || !ids || ids.length === 0) return [];
-    try {
-      const { data, error } = await this.client
-        .from('leads2')
-        .select('clickupid, origem')
-        .in('clickupid', ids);
-      if (error) {
-        console.error('Supabase aggregateOriginsForClickupIds error:', error.message);
-        return [];
-      }
-      const counts = new Map<string | null, number>();
-      for (const r of (data ?? []) as any[]) {
-        const key = r?.origem ?? null;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-      return Array.from(counts.entries()).map(([origem, count]) => ({ origem, count }));
-    } catch (e: any) {
-      console.error('Supabase aggregateOriginsForClickupIds error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // ==================== KOMMO CRM METHODS ====================
 
   // Upsert dos leads do Kommo no snapshot local
-  async upsertKommoLeadsSnapshot(rows: Array<{
-    lead_id: string;
-    name?: string;
-    status: string;
-    pipeline_id?: string;
-    pipeline_name?: string;
-    stage_id?: string;
-    stage_name?: string;
-    responsible_user_id?: string;
-    responsible_user_name?: string;
-    created_at?: string;
-    updated_at?: string;
-    last_updated_at: string;
-    custom_fields?: any;
-    tags?: string[];
-    origin?: string;
-    created_at_snapshot: string;
-  }>): Promise<number> {
-    if (!this.client || rows.length === 0) return 0;
+  async upsertKommoLeadsSnapshot(rows: Array<{ lead_id: number; status_name: string; pipeline_id?: number; updated_at: string }>): Promise<{ success: boolean; processed: number; errors: string[] }> {
+    console.log(`🚀 INÍCIO upsertKommoLeadsSnapshot: ${rows.length} registros recebidos`);
+    if (!this.client) return { success: false, processed: 0, errors: ['Supabase client not initialized'] };
+    if (rows.length === 0) return { success: true, processed: 0, errors: [] };
+    
+    console.log('🔍 Dados para upsert:', JSON.stringify(rows[0], null, 2));
+    
     const chunkSize = Number(process.env.SUPABASE_CHUNK_SIZE ?? 500);
     let total = 0;
+    const errors: string[] = [];
+    
     for (let i = 0; i < rows.length; i += chunkSize) {
       const chunk = rows.slice(i, i + chunkSize);
       try {
-        // Remoção prévia dos registros existentes para simular upsert
-        const ids = chunk.map((r) => r.lead_id).filter((id) => !!id);
-        if (ids.length > 0) {
-          const { error: delError } = await this.client
-            .from('kommo_leads_snapshot')
-            .delete()
-            .in('lead_id', ids);
-          if (delError) {
-            console.error('Supabase upsertKommoLeadsSnapshot delete error:', delError.message);
-          }
-        }
-        // Inserção dos registros atualizados
-        const { error: insError } = await this.client
+        console.log(`🔄 Processando chunk ${i / chunkSize + 1} com ${chunk.length} registros...`);
+        
+        // Usar colunas básicas e todas as colunas de timestamp corretas
+        const cleanedChunk = chunk.map(row => {
+          const cleanedRow = {
+            lead_id: row.lead_id,
+            current_status_name: row.status_name,
+            // Incluir apenas as colunas de timestamp que realmente existem na tabela
+            ts_novos_leads: (row as any).ts_novos_leads || null,
+            ts_tentado_conexao: (row as any).ts_tentado_conexao || null,
+            ts_conectado_qualificacao: (row as any).ts_conectado_qualificacao || null,
+            ts_noshow: (row as any).ts_noshow || null,
+            ts_reuniao: (row as any).ts_reuniao || null,
+            ts_oportunidade: (row as any).ts_oportunidade || null,
+            ts_negociacao: (row as any).ts_negociacao || null,
+            ts_venda_realizada: (row as any).ts_venda_realizada || null,
+            updated_at: row.updated_at
+          };
+          console.log(`🔍 DEBUG: Linha limpa para lead ${row.lead_id}:`, cleanedRow);
+          return cleanedRow;
+        });
+        
+        // Usar upsert nativo do Supabase
+        console.log(`🔍 DEBUG: Tentando upsert de ${cleanedChunk.length} registros...`);
+        console.log(`🔍 DEBUG: Primeiro registro do chunk:`, cleanedChunk[0]);
+        
+        const { data, error } = await this.client
           .from('kommo_leads_snapshot')
-          .insert(chunk);
-        if (insError) {
-          console.error('Supabase upsertKommoLeadsSnapshot insert error:', insError.message);
+          .upsert(cleanedChunk, { onConflict: 'lead_id' })
+          .select();
+          
+        console.log(`🔍 DEBUG: Resultado do upsert - data:`, data?.length || 0, 'registros');
+        console.log(`🔍 DEBUG: Resultado do upsert - error:`, error);
+        
+        if (error) {
+          console.error('Supabase upsertKommoLeadsSnapshot error:', error.message);
+          errors.push(`Chunk ${i / chunkSize + 1}: ${error.message}`);
           continue;
         }
+        
+        console.log(`✅ Chunk processado com sucesso. Registros retornados:`, data?.length || 0);
         total += chunk.length;
       } catch (e: any) {
-        console.error('Supabase upsertKommoLeadsSnapshot unexpected error:', e?.message ?? String(e));
+        const errorMsg = e?.message ?? String(e);
+        console.error('Supabase upsertKommoLeadsSnapshot unexpected error:', errorMsg);
+        errors.push(`Chunk ${i / chunkSize + 1}: ${errorMsg}`);
       }
     }
-    return total;
+    
+    return { 
+      success: errors.length === 0, 
+      processed: total, 
+      errors 
+    };
   }
 
-  // Agregação rápida de leads por status usando tabela snapshot, com filtro opcional por dias
-  async aggregateKommoLeadsByStatus(days?: number): Promise<Array<{ status: string; count: number }>> {
-    if (!this.client) return [];
+  // Verificar se a tabela kommo_leads_snapshot existe
+  async checkKommoLeadsSnapshotTable(): Promise<{ exists: boolean; error?: string }> {
+    if (!this.client) return { exists: false, error: 'Supabase client not initialized' };
     try {
-      let query = this.client
+      const { data, error } = await this.client
         .from('kommo_leads_snapshot')
-        .select('status, count(*)')
-        .not('status', 'is', null);
+        .select('lead_id')
+        .limit(1);
       
-      if (days && Number.isFinite(days) && days > 0) {
-        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('last_updated_at', cutoff);
+      if (error) {
+        return { exists: false, error: error.message };
       }
       
-      const { data, error } = await query;
+      return { exists: true };
+    } catch (e: any) {
+      return { exists: false, error: e?.message ?? String(e) };
+    }
+  }
+
+  // Agregação rápida de leads por status usando tabela snapshot
+  async aggregateKommoLeadsByStatus(): Promise<Array<{ status_name: string; count: number }>> {
+    if (!this.client) return [];
+    try {
+      // Busca todos os leads e agrupa manualmente
+      const { data, error } = await this.client
+        .from('kommo_leads_snapshot')
+        .select('status_name');
+      
       if (error) {
         console.error('Supabase aggregateKommoLeadsByStatus error:', error.message);
         return [];
       }
-      return (data ?? []).map((r: any) => ({
-        status: r.status ?? '',
-        count: Number(r.count ?? 0),
+      
+      // Agrupa os dados manualmente
+      const statusCounts = new Map<string, number>();
+      data?.forEach(row => {
+        const statusName = row.status_name || 'Unknown';
+        statusCounts.set(statusName, (statusCounts.get(statusName) || 0) + 1);
+      });
+      
+      return Array.from(statusCounts.entries()).map(([status_name, count]) => ({
+        status_name,
+        count
       }));
+      
     } catch (e: any) {
       console.error('Supabase aggregateKommoLeadsByStatus error:', e?.message ?? String(e));
       return [];
     }
   }
 
-  // Agregação rápida de leads por origem usando tabela snapshot, com filtro opcional por dias
-  async aggregateKommoLeadsByOrigin(days?: number): Promise<Array<{ origin: string; count: number }>> {
+  // Calcula tempo médio na etapa atual para cada status
+  async getAverageTimeInStage(): Promise<Array<{ status_name: string; avg_duration: string }>> {
     if (!this.client) return [];
     try {
-      let query = this.client
-        .from('kommo_leads_snapshot')
-        .select('origin')
-        .not('origin', 'is', null);
-      
-      if (days && Number.isFinite(days) && days > 0) {
-        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('last_updated_at', cutoff);
-      }
-      
-      const { data, error } = await query;
-      if (error) {
-        console.error('Supabase aggregateKommoLeadsByOrigin error:', error.message);
-        return [];
-      }
-      
-      // Agregar manualmente os dados
-      const rows = (data as any[]) ?? [];
-      const counts = new Map<string, number>();
-      for (const r of rows) {
-        const origin = (r as any).origin ?? '';
-        if (!origin) continue;
-        counts.set(origin, (counts.get(origin) ?? 0) + 1);
-      }
-      
-      return Array.from(counts.entries()).map(([origin, count]) => ({ origin, count }));
-    } catch (e: any) {
-      console.error('Supabase aggregateKommoLeadsByOrigin error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Calcula tempo médio em cada estágio baseado nos dados históricos
-  async calculateAverageTimeInStage(days?: number): Promise<Array<{ status: string; average_time_days: number }>> {
-    if (!this.client) return [];
-    try {
-      // Query SQL personalizada para calcular tempo médio por estágio
-      // Esta é uma implementação simplificada - em produção seria mais complexa
-      let query = this.client
-        .from('kommo_leads_snapshot')
-        .select('status, created_at, updated_at')
-        .not('status', 'is', null)
-        .not('created_at', 'is', null)
-        .not('updated_at', 'is', null);
-      
-      if (days && Number.isFinite(days) && days > 0) {
-        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('last_updated_at', cutoff);
-      }
-      
-      const { data, error } = await query;
-      if (error) {
-        console.error('Supabase calculateAverageTimeInStage error:', error.message);
-        return [];
-      }
-      
-      // Calcular tempo médio por status (simplificado)
-      const statusTimes = new Map<string, number[]>();
-      for (const row of (data ?? []) as any[]) {
-        const status = row.status;
-        const created = new Date(row.created_at).getTime();
-        const updated = new Date(row.updated_at).getTime();
-        const timeDiff = (updated - created) / (1000 * 60 * 60 * 24); // dias
-        
-        if (!statusTimes.has(status)) {
-          statusTimes.set(status, []);
-        }
-        statusTimes.get(status)!.push(timeDiff);
-      }
-      
-      const result: Array<{ status: string; average_time_days: number }> = [];
-      for (const [status, times] of statusTimes.entries()) {
-        const average = times.reduce((sum, time) => sum + time, 0) / times.length;
-        result.push({ status, average_time_days: Math.round(average * 100) / 100 });
-      }
-      
-      return result;
-    } catch (e: any) {
-      console.error('Supabase calculateAverageTimeInStage error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Busca todos os Kommo IDs para uma origem específica
-  async findKommoIdsByOrigin(origin: string): Promise<string[]> {
-    if (!this.client || !origin) return [];
-    try {
       const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('lead_id')
-        .eq('origin', origin);
+        .rpc('calculate_avg_time_in_stage');
       
       if (error) {
-        console.error('Supabase findKommoIdsByOrigin error:', error.message);
+        console.error('Supabase getAverageTimeInStage error:', error.message);
         return [];
       }
       
-      return (data ?? []).map((r: any) => r.lead_id).filter((id: any) => !!id);
+      return data || [];
     } catch (e: any) {
-      console.error('Supabase findKommoIdsByOrigin error:', e?.message ?? String(e));
+      console.error('Supabase getAverageTimeInStage error:', e?.message ?? String(e));
       return [];
     }
   }
 
-  // Retorna IDs recentes de leads do Kommo no snapshot considerando o período (dias)
-  async getRecentKommoLeadIds(days: number): Promise<string[]> {
-    if (!this.client || !Number.isFinite(days) || days <= 0) return [];
+  /**
+   * Upsert em massa de dados de duração de etapas
+   * Implementação do Passo 3 do guia - Upsert em massa no Supabase
+   */
+  async upsertLeadStageDurations(rows: Array<{ 
+    lead_id: number; 
+    stage_name: string; 
+    entered_at: string; 
+    duration_seconds: number; 
+  }>): Promise<{ inserted: number; error?: any }> {
+    if (!this.client) {
+      console.error('❌ Supabase client not initialized');
+      return { inserted: 0, error: 'Client not initialized' };
+    }
+    
+    if (rows.length === 0) {
+      console.log('⚠️ No rows to insert');
+      return { inserted: 0 };
+    }
+    
+    console.log(`💾 Iniciando upsert em massa de ${rows.length} registros...`);
+    console.log('📋 Amostra do primeiro registro:', JSON.stringify(rows[0], null, 2));
+    
     try {
-      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('lead_id')
-        .gte('last_updated_at', cutoff);
+      // Processar em chunks para evitar timeouts
+      const chunkSize = 100;
+      let totalInserted = 0;
       
-      if (error) {
-        console.error('Supabase getRecentKommoLeadIds error:', error.message);
-        return [];
-      }
-      
-      return (data ?? []).map((r: any) => r.lead_id).filter((id: any) => !!id);
-    } catch (e: any) {
-      console.error('Supabase getRecentKommoLeadIds error:', e?.message ?? String(e));
-      return [];
-    }
-  }
-
-  // Upsert das durações de etapas dos leads do Kommo
-  async upsertLeadStageDurations(rows: Array<{
-    lead_id: string;
-    stage_id: string;
-    stage_name: string;
-    duration_seconds: number;
-  }>): Promise<number> {
-    if (!this.client || rows.length === 0) return 0;
-    const chunkSize = Number(process.env.SUPABASE_CHUNK_SIZE ?? 500);
-    let total = 0;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      try {
-        // Remoção prévia dos registros existentes para simular upsert
-        const leadStageKeys = chunk.map((r) => ({ lead_id: r.lead_id, stage_id: r.stage_id }));
-        for (const key of leadStageKeys) {
-          const { error: delError } = await this.client
-            .from('lead_stage_durations')
-            .delete()
-            .eq('lead_id', key.lead_id)
-            .eq('stage_id', key.stage_id);
-          if (delError) {
-            console.error('Supabase upsertLeadStageDurations delete error:', delError.message);
-          }
-        }
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const chunk = rows.slice(i, i + chunkSize);
+        const chunkNumber = Math.floor(i / chunkSize) + 1;
+        const totalChunks = Math.ceil(rows.length / chunkSize);
         
-        // Inserção dos registros atualizados
-        const { error: insError } = await this.client
+        console.log(`🔄 Processando chunk ${chunkNumber}/${totalChunks} (${chunk.length} registros)...`);
+        
+        const { data, error } = await this.client
           .from('lead_stage_durations')
-          .insert(chunk);
-        if (insError) {
-          console.error('Supabase upsertLeadStageDurations insert error:', insError.message);
-          continue;
+          .upsert(chunk, {
+            onConflict: 'lead_id,stage_name,entered_at',
+            ignoreDuplicates: false
+          })
+          .select();
+        
+        if (error) {
+          console.error(`❌ Erro no chunk ${chunkNumber}:`, error);
+          return { inserted: totalInserted, error };
         }
-        total += chunk.length;
-      } catch (e: any) {
-        console.error('Supabase upsertLeadStageDurations unexpected error:', e?.message ?? String(e));
+        
+        const insertedCount = data?.length || chunk.length;
+        totalInserted += insertedCount;
+        
+        console.log(`✅ Chunk ${chunkNumber} processado: ${insertedCount} registros`);
+        
+        // Pequeno delay entre chunks para não sobrecarregar
+        if (i + chunkSize < rows.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
+      
+      console.log(`🎉 Upsert em massa concluído: ${totalInserted} registros processados com sucesso!`);
+      return { inserted: totalInserted };
+      
+    } catch (e: any) {
+      console.error('💥 Erro fatal no upsert em massa:', e?.message ?? String(e));
+      return { inserted: 0, error: e };
     }
-    return total;
   }
 
-  // Calcular tempo médio em cada etapa baseado na tabela lead_stage_durations
-  async getAverageTimeInStageFromDurations(): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
+  /**
+   * Calcula tempo médio por etapa usando dados históricos da tabela lead_stage_durations
+   * Usa SQL para calcular diferenças entre timestamps de entrada e saída
+   */
+  async getAverageTimeInStageFromHistory(): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
     if (!this.client) return [];
+    
     try {
-      const { data, error } = await this.client
+      // Verificar se a tabela existe
+      const { data: tableCheck, error: tableError } = await this.client
         .from('lead_stage_durations')
-        .select('stage_name, duration_seconds')
-        .not('stage_name', 'is', null)
-        .not('duration_seconds', 'is', null);
+        .select('stage_name')
+        .limit(1);
       
-      if (error) {
-        console.error('Supabase getAverageTimeInStageFromDurations error:', error.message);
+      if (tableError) {
+        console.log('Table does not exist, returning empty array');
         return [];
       }
       
-      // Calcular média por etapa
-      const stageGroups = new Map<string, number[]>();
-      for (const row of (data ?? []) as any[]) {
-        const stageName = row.stage_name;
-        const duration = Number(row.duration_seconds);
-        
-        if (!stageGroups.has(stageName)) {
-          stageGroups.set(stageName, []);
-        }
-        stageGroups.get(stageName)!.push(duration);
+      // Query SQL que calcula a média das diferenças entre timestamps
+      const { data, error } = await this.client.rpc('calculate_avg_stage_durations');
+      
+      if (error) {
+        console.error('Supabase getAverageTimeInStageFromHistory error:', error.message);
+        return [];
       }
       
-      const result: Array<{ stage_name: string; avg_duration_seconds: number }> = [];
-      for (const [stageName, durations] of stageGroups.entries()) {
-        const average = durations.reduce((sum, duration) => sum + duration, 0) / durations.length;
-        result.push({ stage_name: stageName, avg_duration_seconds: Math.round(average) });
+      if (!data || data.length === 0) {
+        console.log('No historical data found, returning empty array');
+        return [];
       }
       
-      return result;
+      return data;
+      
     } catch (e: any) {
-      console.error('Supabase getAverageTimeInStageFromDurations error:', e?.message ?? String(e));
+      console.error('Supabase getAverageTimeInStageFromHistory error:', e?.message ?? String(e));
       return [];
     }
   }
 
-  // Agrega origens para um conjunto de Kommo IDs
-  async aggregateOriginsForKommoIds(ids: string[]): Promise<Array<{ status: string; count: number }>> {
-    if (!this.client || !ids || ids.length === 0) return [];
+  /**
+   * Busca todos os leads do snapshot para comparação de transições
+   * Usado pela nova arquitetura de rastreamento de timestamps
+   */
+  async getAllKommoLeadsSnapshot(): Promise<any[]> {
+    if (!this.client) return [];
+    
     try {
       const { data, error } = await this.client
         .from('kommo_leads_snapshot')
-        .select('status')
-        .in('lead_id', ids)
-        .not('status', 'is', null);
+        .select('*');
       
       if (error) {
-        console.error('Supabase aggregateOriginsForKommoIds error:', error.message);
+        console.error('Supabase getAllKommoLeadsSnapshot error:', error.message);
         return [];
       }
       
-      const counts = new Map<string, number>();
-      for (const r of (data ?? []) as any[]) {
-        const status = r.status;
-        counts.set(status, (counts.get(status) ?? 0) + 1);
-      }
+      return data || [];
       
-      return Array.from(counts.entries()).map(([status, count]) => ({ status, count }));
     } catch (e: any) {
-      console.error('Supabase aggregateOriginsForKommoIds error:', e?.message ?? String(e));
+      console.error('Supabase getAllKommoLeadsSnapshot error:', e?.message ?? String(e));
       return [];
     }
   }
+
+  /**
+   * Busca um lead específico por ID do snapshot
+   */
+  async getKommoLeadSnapshotById(leadId: number): Promise<any | null> {
+    if (!this.client) return null;
+    
+    try {
+      const { data, error } = await this.client
+        .from('kommo_leads_snapshot')
+        .select('*')
+        .eq('lead_id', leadId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Lead não encontrado
+          return null;
+        }
+        console.error('Supabase getKommoLeadSnapshotById error:', error.message);
+        return null;
+      }
+      
+      return data;
+      
+    } catch (e: any) {
+      console.error('Supabase getKommoLeadSnapshotById error:', e?.message ?? String(e));
+      return null;
+    }
+  }
+
+  /**
+   * Calcula tempo médio por etapa usando timestamps da nova arquitetura
+   * Usa SQL para calcular diferenças entre colunas de timestamp
+   */
+  async getAverageTimeInStageFromTimestamps(): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
+    if (!this.client) return [];
+    
+    try {
+      // Query SQL que calcula a média das diferenças entre timestamps
+      const { data, error } = await this.client.rpc('calculate_stage_durations_from_timestamps');
+      
+      if (error) {
+        console.error('Supabase getAverageTimeInStageFromTimestamps error:', error.message);
+        return [];
+      }
+      
+      if (!data || data.length === 0) {
+        console.log('No timestamp data found, returning empty array');
+        return [];
+      }
+      
+      return data;
+      
+    } catch (e: any) {
+      console.error('Supabase getAverageTimeInStageFromTimestamps error:', e?.message ?? String(e));
+      return [];
+    }
+  }
+
+  /**
+   * Calcula tempo médio por etapa incluindo durações em andamento
+   * Implementação expandida para todas as etapas do funil
+   */
+  async getAverageTimeInStageWithOngoing(): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
+    if (!this.client) return [];
+    
+    try {
+      // Buscar todos os dados necessários
+      const { data, error } = await this.client
+        .from('kommo_leads_snapshot')
+        .select('ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada');
+      
+      if (error) {
+        console.error('Erro ao buscar dados para cálculo de duração:', error.message);
+        return [];
+      }
+
+      if (!data || data.length === 0) {
+        console.log('No timestamp data found for ongoing calculations, returning empty array');
+        return [];
+      }
+
+      const results: Array<{ stage_name: string; avg_duration_seconds: number }> = [];
+
+      // Definir as etapas e suas transições
+      const stages = [
+        { name: 'Novos Leads', current: 'ts_novos_leads', next: 'ts_tentado_conexao' },
+        { name: 'Tentado Conexão', current: 'ts_tentado_conexao', next: 'ts_conectado_qualificacao' },
+        { name: 'Conectado/Qualificação', current: 'ts_conectado_qualificacao', next: 'ts_oportunidade' },
+        { name: 'Oportunidade', current: 'ts_oportunidade', next: 'ts_negociacao' },
+        { name: 'Negociação', current: 'ts_negociacao', next: null }
+      ];
+
+      // Calcular duração para cada etapa
+      for (const stage of stages) {
+        const recordsInStage = data.filter(record => record[stage.current] !== null);
+        
+        if (recordsInStage.length === 0) {
+          continue; // Pular etapas sem dados
+        }
+
+        const durations = recordsInStage.map(record => {
+          const startTime = new Date(record[stage.current]);
+          const endTime = stage.next && record[stage.next] 
+            ? new Date(record[stage.next])
+            : new Date(); // Usar NOW() se ainda não passou para próxima etapa ou é a última etapa
+          
+          return (endTime.getTime() - startTime.getTime()) / 1000; // Duração em segundos
+        });
+
+        const avgDuration = durations.reduce((sum, duration) => sum + duration, 0) / durations.length;
+
+        results.push({
+          stage_name: stage.name,
+          avg_duration_seconds: Math.round(avgDuration)
+        });
+      }
+
+      return results;
+      
+    } catch (e: any) {
+      console.error('Supabase getAverageTimeInStageWithOngoing error:', e?.message ?? String(e));
+      return [];
+    }
+  }
+
+  /**
+   * Calcula a taxa de agendamento (scheduling rate)
+   * Retorna a proporção de leads únicos que chegaram na etapa de agendamento
+   */
+  async getSchedulingRate(): Promise<Array<{ scheduling_rate: number | null }>> {
+    if (!this.client) return [];
+    
+    try {
+      // Buscar total de leads únicos
+      const { count: totalLeads, error: totalError } = await this.client
+        .from('kommo_leads_snapshot')
+        .select('lead_id', { count: 'exact', head: true });
+      
+      if (totalError) {
+        console.error('Supabase getSchedulingRate totalLeads error:', totalError.message);
+        return [{ scheduling_rate: null }];
+      }
+      
+      // Buscar leads que têm timestamp de agendamento
+      const { count: scheduledLeads, error: scheduledError } = await this.client
+        .from('kommo_leads_snapshot')
+        .select('lead_id', { count: 'exact', head: true })
+        .not('ts_agendados', 'is', null);
+      
+      if (scheduledError) {
+        console.error('Supabase getSchedulingRate scheduledLeads error:', scheduledError.message);
+        return [{ scheduling_rate: null }];
+      }
+      
+      // Calcular a taxa de agendamento
+      const schedulingRate = totalLeads && totalLeads > 0 
+        ? (scheduledLeads || 0) / totalLeads 
+        : null;
+      
+      return [{ scheduling_rate: schedulingRate }];
+      
+    } catch (e: any) {
+      console.error('Supabase getSchedulingRate error:', e?.message ?? String(e));
+      return [];
+    }
+  }
+
+  // Métodos para testes - evitar acesso direto ao client privado
+  async insertTestRecord(tableName: string, record: any): Promise<{ data: any; error: any }> {
+    if (!this.client) return { data: null, error: { message: 'Supabase client not initialized' } };
+    
+    try {
+      const { data, error } = await this.client
+        .from(tableName)
+        .insert([record])
+        .select();
+      
+      return { data, error };
+    } catch (e: any) {
+      return { data: null, error: { message: e?.message ?? String(e) } };
+    }
+  }
+
+  async deleteTestRecord(tableName: string, column: string, value: any): Promise<{ error: any }> {
+    if (!this.client) return { error: { message: 'Supabase client not initialized' } };
+    
+    try {
+      const { error } = await this.client
+        .from(tableName)
+        .delete()
+        .eq(column, value);
+      
+      return { error };
+    } catch (e: any) {
+      return { error: { message: e?.message ?? String(e) } };
+    }
+  }
+
+  async deleteTestRecords(tableName: string, column: string, values: any[]): Promise<{ error: any }> {
+    if (!this.client) return { error: { message: 'Supabase client not initialized' } };
+    
+    try {
+      const { error } = await this.client
+        .from(tableName)
+        .delete()
+        .in(column, values);
+      
+      return { error };
+    } catch (e: any) {
+      return { error: { message: e?.message ?? String(e) } };
+    }
+  }
+
+  async selectFromTable(tableName: string, limit?: number): Promise<{ data: any; error: any }> {
+    if (!this.client) return { data: null, error: { message: 'Supabase client not initialized' } };
+    
+    try {
+      let query = this.client.from(tableName).select('*');
+      
+      if (limit) {
+        query = query.limit(limit);
+      }
+      
+      const { data, error } = await query;
+      
+      return { data, error };
+    } catch (e: any) {
+      return { data: null, error: { message: e?.message ?? String(e) } };
+    }
+  }
+
+  async testColumnExists(tableName: string, column: string, testValue: any): Promise<boolean> {
+    if (!this.client) return false;
+    
+    try {
+      const testData: any = { lead_id: 999999 };
+      
+      // Adicionar a coluna específica para teste
+      if (column.startsWith('ts_') || column.includes('_at')) {
+        testData[column] = new Date().toISOString();
+      } else if (column === 'pipeline_id') {
+        testData[column] = 123456;
+      } else if (column.includes('status') || column === 'origin') {
+        testData[column] = 'teste';
+      } else {
+        testData[column] = testValue || 'teste';
+      }
+      
+      // Tentar inserir
+      const { error: insertError } = await this.client
+        .from(tableName)
+        .insert(testData);
+      
+      if (!insertError) {
+        // Se inseriu com sucesso, deletar o registro de teste
+        await this.client
+          .from(tableName)
+          .delete()
+          .eq('lead_id', testData.lead_id);
+        
+        return true;
+      }
+      
+      return false;
+    } catch (e: any) {
+      return false;
+    }
+  }
+
+  /**
+   * Faz uma consulta vazia para verificar o schema de uma tabela
+   */
+  async getTableSchema(tableName: string): Promise<{ data: any; error: any }> {
+    if (!this.client) {
+      return { data: null, error: { message: 'Supabase client not initialized' } };
+    }
+    return await this.client
+      .from(tableName)
+      .select('*')
+      .limit(0);
+  }
+
+  /**
+   * Executa uma consulta SQL personalizada
+   */
+  async executeRawQuery(query: string): Promise<{ data: any; error: any }> {
+    if (!this.client) {
+      return { data: null, error: { message: 'Supabase client not initialized' } };
+    }
+    return await this.client.rpc('execute_sql', { query });
+  }
+
 }

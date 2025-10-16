@@ -1,28 +1,22 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { useQuery } from "@tanstack/react-query";
-import { usePeriod } from "@/contexts/PeriodContext";
 import { BarChartSkeleton } from "./BarChartSkeleton";
 import { formatDuration } from "@/lib/utils";
-
-interface TimeInStageItem {
-  stage: string;
-  averageDays: number;
-}
+import { useTimeInStage } from "@/hooks/useTimeInStage";
 
 const STAGE_COLORS: Record<string, string> = {
-  "novo lead": "hsl(var(--chart-1))",
-  "closers em contato": "hsl(var(--chart-2))",
-  "agendados": "hsl(var(--chart-3))",
-  "call realizada": "hsl(var(--chart-4))",
-  "vendas": "hsl(var(--chart-5))",
+  "novos leads": "hsl(var(--chart-1))",
+  "tentado conexão": "hsl(var(--chart-2))",
+  "conectado/qualificação": "hsl(var(--chart-3))",
+  "oportunidade": "hsl(var(--chart-4))",
+  "negociação": "hsl(var(--chart-5))",
 };
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const days = payload[0].value;
+    const seconds = payload[0].payload.seconds; // Usar os segundos diretamente
     const isAlert = days > 7; // Considera gargalo se mais de 7 dias
-    const seconds = days * 24 * 60 * 60; // Converter dias para segundos para usar formatDuration
     const formattedDuration = formatDuration(seconds);
     
     return (
@@ -40,31 +34,12 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function TimePerStageChart() {
-  const { selectedPeriod } = usePeriod();
-
-  const { data, isLoading, error } = useQuery<TimeInStageItem[]>({
-    queryKey: ["funnel", "time-in-stage", selectedPeriod],
-    queryFn: async () => {
-      const url = selectedPeriod 
-        ? `/api/funnel/time-in-stage?days=${selectedPeriod}`
-        : "/api/funnel/time-in-stage";
-      
-      const response = await fetch(url, {
-        headers: { Accept: "application/json" }
-      });
-      
-      if (!response.ok) {
-        throw new Error("Falha ao carregar dados de tempo por etapa");
-      }
-      
-      return response.json();
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutos
-  });
+  const { data, isLoading, error } = useTimeInStage();
 
   const processedData = data?.map(item => ({
     stage: item.stage,
-    days: item.averageDays,
+    days: item.averageTimeInDays,
+    seconds: item.averageTimeInSeconds,
     color: STAGE_COLORS[item.stage.toLowerCase()] || "hsl(var(--chart-1))"
   })) || [];
 

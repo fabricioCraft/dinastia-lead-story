@@ -1,0 +1,185 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - region "Notifications alt+T"
+    - main [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - heading "Jornada do Lead Dinastia" [level=1] [ref=e9]
+            - paragraph [ref=e10]: Transformando dados em histórias de sucesso
+          - button "Todos os períodos" [ref=e13] [cursor=pointer]:
+            - img
+            - generic [ref=e14]: Todos os períodos
+            - img
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - generic [ref=e18]: Capítulo 1
+            - heading "De Onde Nossos Leads Vêm?" [level=2] [ref=e20]
+            - paragraph [ref=e21]: Entenda a origem e distribuição dos seus leads por canal de aquisição
+          - generic [ref=e22]:
+            - generic [ref=e23]:
+              - generic [ref=e24]:
+                - img [ref=e25]
+                - heading "Volume Diário de Leads" [level=3] [ref=e28]
+              - paragraph [ref=e29]: Evolução diária da aquisição de leads (leads2 + MR_base_leads)
+              - generic [ref=e30]:
+                - generic [ref=e31]:
+                  - paragraph [ref=e32]: 12,435
+                  - paragraph [ref=e33]: Total de Leads
+                - generic [ref=e34]:
+                  - paragraph [ref=e35]: "55"
+                  - paragraph [ref=e36]: Média Diária
+                - generic [ref=e37]:
+                  - paragraph [ref=e38]: "204"
+                  - paragraph [ref=e39]: Pico Diário
+              - img [ref=e43]:
+                - generic [ref=e49]:
+                  - generic [ref=e51]: 03/03
+                  - generic [ref=e53]: 10/03
+                  - generic [ref=e55]: 17/03
+                  - generic [ref=e57]: 24/03
+                  - generic [ref=e59]: 31/03
+                  - generic [ref=e61]: 07/04
+                  - generic [ref=e63]: 14/04
+                  - generic [ref=e65]: 21/04
+                  - generic [ref=e67]: 28/04
+                  - generic [ref=e69]: 05/05
+                  - generic [ref=e71]: 12/05
+                  - generic [ref=e73]: 19/05
+                  - generic [ref=e75]: 26/05
+                  - generic [ref=e77]: 02/06
+                  - generic [ref=e79]: 09/06
+                  - generic [ref=e81]: 16/06
+                  - generic [ref=e83]: 23/06
+                  - generic [ref=e85]: 30/06
+                  - generic [ref=e87]: 07/07
+                  - generic [ref=e89]: 14/07
+                  - generic [ref=e91]: 21/07
+                  - generic [ref=e93]: 28/07
+                  - generic [ref=e95]: 04/08
+                  - generic [ref=e97]: 11/08
+                  - generic [ref=e99]: 18/08
+                  - generic [ref=e101]: 25/08
+                  - generic [ref=e103]: 01/09
+                  - generic [ref=e105]: 08/09
+                  - generic [ref=e107]: 15/09
+                  - generic [ref=e109]: 22/09
+                  - generic [ref=e111]: 29/09
+                  - generic [ref=e113]: 06/10
+                  - generic [ref=e115]: 16/10
+                - generic [ref=e117]:
+                  - generic [ref=e119]: "0"
+                  - generic [ref=e121]: "55"
+                  - generic [ref=e123]: "110"
+                  - generic [ref=e125]: "165"
+                  - generic [ref=e127]: "220"
+              - generic [ref=e359]:
+                - generic [ref=e360]: "Período: 228 dias"
+                - generic [ref=e361]: Atualizado automaticamente
+            - generic [ref=e362]:
+              - heading "Origem dos Leads" [level=4] [ref=e363]
+              - generic [ref=e364]:
+                - generic [ref=e366]:
+                  - generic [ref=e367]:
+                    - img [ref=e368]
+                    - combobox [ref=e370]:
+                      - 'option "Min: 1 lead" [selected]'
+                      - 'option "Min: 2 leads"'
+                      - 'option "Min: 5 leads"'
+                      - 'option "Min: 10 leads"'
+                  - button "Ver Tudo" [ref=e371] [cursor=pointer]:
+                    - img
+                    - text: Ver Tudo
+                - img [ref=e375]:
+                  - generic [ref=e381]:
+                    - generic [ref=e383]: "0"
+                    - generic [ref=e385]: "450"
+                    - generic [ref=e387]: "900"
+                    - generic [ref=e389]: 1,350
+                    - generic [ref=e391]: 1,800
+                  - generic [ref=e393]:
+                    - generic [ref=e395]: Isca Hormozi
+                    - generic [ref=e397]: Sem Origem
+                    - generic [ref=e399]: Isca Scopeline
+                    - generic [ref=e401]: Manychat
+                    - generic [ref=e403]: YouTube
+                    - generic [ref=e405]: Desafio
+                    - generic [ref=e407]: "{{campaign.name}}"
+                    - generic [ref=e409]: Masterclass
+                - generic [ref=e429]:
+                  - button [disabled]:
+                    - img
+                  - generic [ref=e430]: Página 1 de 2
+                  - button [ref=e431] [cursor=pointer]:
+                    - img
+                - generic [ref=e432]:
+                  - generic [ref=e433]:
+                    - paragraph [ref=e434]: Principal Origem
+                    - paragraph [ref=e435]: Isca Hormozi
+                    - generic [ref=e436]: 1783 leads
+                  - generic [ref=e437]:
+                    - paragraph [ref=e438]: Origens Únicas
+                    - paragraph [ref=e439]: "11"
+                    - generic [ref=e440]: 11 visíveis
+                  - generic [ref=e441]:
+                    - paragraph [ref=e442]: Concentração
+                    - paragraph [ref=e443]: 89.4%
+                    - generic [ref=e444]: Top 3 origens
+                  - generic [ref=e445]:
+                    - paragraph [ref=e446]: Média por Origem
+                    - paragraph [ref=e447]: "227"
+                    - generic [ref=e448]: leads/origem
+        - generic [ref=e449]:
+          - generic [ref=e450]:
+            - generic [ref=e452]: Capítulo 2
+            - heading "Performance de Agendamentos" [level=2] [ref=e454]
+            - paragraph [ref=e455]: Acompanhe a conversão de leads em agendamentos e o volume diário de reuniões marcadas
+          - generic [ref=e457]:
+            - generic [ref=e458]:
+              - img [ref=e459]
+              - heading "Volume Diário de Agendamentos" [level=3] [ref=e462]
+            - paragraph [ref=e463]: Evolução diária dos agendamentos realizados
+            - generic [ref=e464]:
+              - generic [ref=e465]:
+                - paragraph [ref=e466]: "52"
+                - paragraph [ref=e467]: Total de Agendamentos
+              - generic [ref=e468]:
+                - paragraph [ref=e469]: "3"
+                - paragraph [ref=e470]: Média Diária
+              - generic [ref=e471]:
+                - paragraph [ref=e472]: "10"
+                - paragraph [ref=e473]: Pico Diário
+            - img [ref=e477]:
+              - generic [ref=e483]:
+                - generic [ref=e485]: 23/09
+                - generic [ref=e487]: 24/09
+                - generic [ref=e489]: 25/09
+                - generic [ref=e491]: 26/09
+                - generic [ref=e493]: 28/09
+                - generic [ref=e495]: 30/09
+                - generic [ref=e497]: 01/10
+                - generic [ref=e499]: 02/10
+                - generic [ref=e501]: 06/10
+                - generic [ref=e503]: 07/10
+                - generic [ref=e505]: 08/10
+                - generic [ref=e507]: 09/10
+                - generic [ref=e509]: 10/10
+                - generic [ref=e511]: 13/10
+                - generic [ref=e513]: 14/10
+              - generic [ref=e515]:
+                - generic [ref=e517]: "0"
+                - generic [ref=e519]: "3"
+                - generic [ref=e521]: "6"
+                - generic [ref=e523]: "9"
+                - generic [ref=e525]: "12"
+            - generic [ref=e544]:
+              - generic [ref=e545]: "Período: 15 dias"
+              - generic [ref=e546]: Atualizado automaticamente
+        - paragraph [ref=e548]: "Última atualização: 03/10/2025, 15:42 | Dashboard gerado por Dinastia"
+  - generic [ref=e549]: "3"
+```

@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
-import { FunnelService } from './funnel.service';
+import { ConfigModule } from '@nestjs/config';
 import { FunnelController } from './funnel.controller';
+import { FunnelService } from './funnel.service';
+import { TestSqlController } from './test-sql.controller';
 import { SupabaseService } from '../services/supabase.service';
 import { KommoService } from '../services/kommo.service';
+import { LeadStageHistoryService } from '../services/lead-stage-history.service';
 
 @Module({
-  controllers: [FunnelController],
-  providers: [FunnelService, SupabaseService, KommoService],
+  imports: [ConfigModule],
+  controllers: [FunnelController, TestSqlController],
+  providers: [FunnelService, SupabaseService, KommoService, LeadStageHistoryService],
 })
 export class FunnelModule {}

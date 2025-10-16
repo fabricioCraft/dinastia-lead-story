@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../services/supabase.service';
-
-export interface EnrichedLead {
-  id: string;
-  name: string;
-  status: string;
-  origin: string | null;
-}
+import { LeadStageHistoryService } from '../services/lead-stage-history.service';
 
 export interface StageSummaryItem {
   stage: string;
@@ -16,77 +10,87 @@ export interface StageSummaryItem {
 export interface TimeInStageItem {
   stage: string;
   averageTimeInDays: number;
-}
-
-export interface OriginSummaryItem {
-  origin: string;
-  count: number;
+  averageTimeInSeconds: number;
 }
 
 @Injectable()
 export class FunnelService {
-  constructor(private supabase: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly leadStageHistoryService: LeadStageHistoryService
+  ) {}
 
   /**
-   * Retorna resumo dos leads por estágio do funil
-   * Utiliza dados da tabela kommo_leads_snapshot
+   * Retorna contagem de leads por etapa
+   * Dados obtidos da tabela kommo_leads_snapshot
    */
-  async getStagesSummary(days?: number): Promise<StageSummaryItem[]> {
-    const rows = await this.supabase.aggregateKommoLeadsByStatus(days);
-    if (!rows || rows.length === 0) return [];
-    
-    const summary: StageSummaryItem[] = rows.map((r) => ({ 
-      stage: r.status ?? '', 
-      count: Number(r.count ?? 0) 
-    }));
-    
-    // Ordenação alfabética para estabilidade
-    summary.sort((a, b) => a.stage.localeCompare(b.stage));
-    return summary;
+  async getStagesSummary(): Promise<StageSummaryItem[]> {
+    try {
+      const data = await this.supabaseService.aggregateKommoLeadsByStatus();
+      
+      return data.map(item => ({
+        stage: item.status_name,
+        count: item.count
+      }));
+      
+    } catch (error) {
+      console.error('Error fetching stages summary:', error);
+      throw error;
+    }
   }
 
   /**
-   * Retorna resumo dos leads por origem
-   * Utiliza dados da tabela kommo_leads_snapshot
+   * Retorna o tempo médio que leads passam em cada etapa
+   * Nova arquitetura: usa histórico de estágios da tabela lead_stage_history
+   * Inclui durações em andamento para leads que ainda estão em suas etapas atuais
    */
-  async getOriginSummary(days?: number): Promise<OriginSummaryItem[]> {
-    const rows = await this.supabase.aggregateKommoLeadsByOrigin(days);
-    if (!rows || rows.length === 0) return [];
-    
-    const summary: OriginSummaryItem[] = rows.map((r) => ({ 
-      origin: r.origin ?? 'Sem origem', 
-      count: Number(r.count ?? 0) 
-    }));
-    
-    // Ordenação alfabética para estabilidade
-    summary.sort((a, b) => a.origin.localeCompare(b.origin));
-    return summary;
+  async getTimeInStage(): Promise<TimeInStageItem[]> {
+    try {
+      // Primeiro tenta usar o novo sistema de histórico
+      const historyData = await this.leadStageHistoryService.getAverageTimePerStage();
+      
+      if (historyData && historyData.length > 0) {
+        return historyData.map(item => ({
+          stage: item.stage_name,
+          averageTimeInDays: Math.round((item.avg_duration_seconds / 86400) * 10) / 10,
+          averageTimeInSeconds: Math.round(item.avg_duration_seconds)
+        }));
+      }
+      
+      // Fallback para o sistema baseado em timestamps COM durações em andamento
+      console.log('Nenhum dado de histórico encontrado, usando fallback para timestamps com durações em andamento');
+      const timestampData = await this.supabaseService.getAverageTimeInStageWithOngoing();
+      
+      return timestampData.map(item => ({
+        stage: item.stage_name,
+        averageTimeInDays: Math.round((item.avg_duration_seconds / 86400) * 10) / 10,
+        averageTimeInSeconds: Math.round(item.avg_duration_seconds)
+      }));
+      
+    } catch (error) {
+      console.error('Error fetching time in stage:', error);
+      throw error;
+    }
   }
 
   /**
-   * Retorna tempo médio em cada estágio do funil
-   * Calcula baseado nos dados históricos da tabela lead_stage_durations
+   * Retorna a taxa de agendamento
+   * Calcula a proporção de leads únicos que chegaram na etapa de agendamento
    */
-  async getTimeInStage(days?: number): Promise<TimeInStageItem[]> {
-    const rows = await this.supabase.getAverageTimeInStageFromDurations();
-    if (!rows || rows.length === 0) return [];
-    
-    const timeInStage: TimeInStageItem[] = rows.map((r) => ({
-      stage: r.stage_name ?? '',
-      averageTimeInDays: Number(r.avg_duration_seconds ?? 0) / (24 * 60 * 60) // Converter segundos para dias
-    }));
-    
-    // Ordenação alfabética para estabilidade
-    timeInStage.sort((a, b) => a.stage.localeCompare(b.stage));
-    return timeInStage;
-  }
-
-  /**
-   * Método legado mantido para compatibilidade
-   * @deprecated Use getStagesSummary() instead
-   */
-  async getSummary(days?: number): Promise<EnrichedLead[]> {
-    // Retorna array vazio por enquanto, será implementado quando necessário
-    return [];
+  async getSchedulingRate(): Promise<{ schedulingRate: number }> {
+    try {
+      const data = await this.supabaseService.getSchedulingRate();
+      
+      // Extrair o valor da taxa de agendamento ou retornar 0 se não houver dados
+      const schedulingRate = data.length > 0 && data[0].scheduling_rate !== null 
+        ? data[0].scheduling_rate 
+        : 0;
+      
+      return { schedulingRate };
+      
+    } catch (error) {
+      console.error('Error fetching scheduling rate:', error);
+      throw error;
+    }
   }
 }
