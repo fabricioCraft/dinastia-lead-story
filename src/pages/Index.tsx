@@ -81,12 +81,7 @@ const Index = () => {
             </div>
           </section>
 
-          {/* Footer */}
-          <div className="pt-8 pb-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              Última atualização: 03/10/2025, 15:42 | Dashboard gerado por Dinastia
-            </p>
-          </div>
+
         </div>
       </main>
     </div>
