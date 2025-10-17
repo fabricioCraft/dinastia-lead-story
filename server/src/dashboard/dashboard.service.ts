@@ -461,12 +461,15 @@ export class DashboardService {
       }
 
       // Transformar os dados para o formato esperado
-      const result: DailyAppointmentsData[] = (data || []).map((row: any) => ({
+      const appointmentsData: DailyAppointmentsData[] = (data || []).map((row: any) => ({
         day: row.day,
         appointments_per_day: parseInt(row.appointments_per_day, 10)
       }));
 
-      this.logger.log(`Retornando ${result.length} registros de agendamentos diários`);
+      // Preencher lacunas de datas com 0 agendamentos se startDate e endDate forem fornecidos
+      const result = this.fillDateGapsForAppointments(appointmentsData, startDate, endDate);
+
+      this.logger.log(`Retornando ${result.length} registros de agendamentos diários (incluindo dias com 0 agendamentos)`);
       return result;
 
     } catch (error) {
@@ -605,19 +608,60 @@ export class DashboardService {
       this.logger.log(`Fallback unificado processou ${validDatesCount} datas válidas, ignorou ${invalidDatesCount} datas inválidas e ${duplicatesCount} duplicatas`);
 
       // Converter para array e ordenar
-      const result: DailyAppointmentsData[] = Array.from(dailyCounts.entries())
+      const appointmentsData: DailyAppointmentsData[] = Array.from(dailyCounts.entries())
         .map(([day, appointments_per_day]) => ({
           day,
           appointments_per_day
         }))
         .sort((a, b) => a.day.localeCompare(b.day));
 
-      this.logger.log(`Retornando ${result.length} registros de agendamentos diários do fallback unificado`);
+      // Preencher lacunas de datas com 0 agendamentos se startDate e endDate forem fornecidos
+      const result = this.fillDateGapsForAppointments(appointmentsData, startDate, endDate);
+
+      this.logger.log(`Retornando ${result.length} registros de agendamentos diários do fallback unificado (incluindo dias com 0 agendamentos)`);
       return result;
 
     } catch (error) {
       this.logger.error('Erro no fallback unificado de agendamentos diários:', error);
       return [];
+    }
+  }
+
+  /**
+   * Preenche lacunas de datas com 0 agendamentos para garantir que todos os dias do período sejam incluídos
+   */
+  private fillDateGapsForAppointments(appointmentsData: DailyAppointmentsData[], startDate?: string, endDate?: string): DailyAppointmentsData[] {
+    // Se não temos startDate e endDate, retornar os dados originais
+    if (!startDate || !endDate) {
+      return appointmentsData;
+    }
+
+    try {
+      // Criar um mapa dos dados existentes para acesso rápido
+      const dataMap = new Map<string, number>();
+      appointmentsData.forEach(item => {
+        dataMap.set(item.day, item.appointments_per_day);
+      });
+
+      // Gerar todas as datas no período
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const result: DailyAppointmentsData[] = [];
+
+      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+        const dayStr = date.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+        const appointments = dataMap.get(dayStr) || 0;
+        
+        result.push({
+          day: dayStr,
+          appointments_per_day: appointments
+        });
+      }
+
+      return result.sort((a, b) => a.day.localeCompare(b.day));
+    } catch (error) {
+      this.logger.error('Erro ao preencher lacunas de datas para agendamentos:', error);
+      return appointmentsData; // Retornar dados originais em caso de erro
     }
   }
 

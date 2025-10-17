@@ -32,7 +32,7 @@ const PREDEFINED_RANGES: PresetRange[] = [
   {
     label: 'Últimos 7 dias',
     range: () => ({
-      startDate: subDays(new Date(), 6),
+      startDate: subDays(new Date(), 7),
       endDate: new Date(),
     }),
     days: 7,
@@ -40,7 +40,7 @@ const PREDEFINED_RANGES: PresetRange[] = [
   {
     label: 'Últimos 14 dias',
     range: () => ({
-      startDate: subDays(new Date(), 13),
+      startDate: subDays(new Date(), 14),
       endDate: new Date(),
     }),
     days: 14,
@@ -48,7 +48,7 @@ const PREDEFINED_RANGES: PresetRange[] = [
   {
     label: 'Últimos 21 dias',
     range: () => ({
-      startDate: subDays(new Date(), 20),
+      startDate: subDays(new Date(), 21),
       endDate: new Date(),
     }),
     days: 21,
@@ -56,7 +56,7 @@ const PREDEFINED_RANGES: PresetRange[] = [
   {
     label: 'Últimos 30 dias',
     range: () => ({
-      startDate: subDays(new Date(), 29),
+      startDate: subDays(new Date(), 30),
       endDate: new Date(),
     }),
     days: 30,
