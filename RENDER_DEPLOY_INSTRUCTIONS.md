@@ -52,6 +52,63 @@ Node Version: 18 (ou superior)
 Environment: Node.js
 ```
 
+## 🚨 **CORREÇÃO CRÍTICA: Start Command**
+
+### **Problema Identificado:**
+Se você está enfrentando erro no Start Command, verifique se está usando o comando correto baseado no `package.json` do servidor.
+
+### **Verificação do package.json:**
+No arquivo `server/package.json`, os scripts disponíveis são:
+```json
+"scripts": {
+  "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+  "build": "tsc -p tsconfig.build.json", 
+  "start": "node dist/main.js",
+  "test": "jest --passWithNoTests",
+  "test:watch": "jest --watch"
+}
+```
+
+### **Start Command Correto:**
+**Use EXATAMENTE este comando na Render:**
+```bash
+npm run start
+```
+
+**OU, alternativamente (comando direto):**
+```bash
+node dist/main.js
+```
+
+### **⚠️ IMPORTANTE:**
+- **NÃO use** `npm run start:prod` (este script não existe no projeto)
+- **USE** `npm run start` (que executa `node dist/main.js`)
+- O arquivo compilado é `main.js`, não `main` (note a extensão `.js`)
+
+### **📋 Passos para Corrigir na Render:**
+
+1. **Acesse o Dashboard da Render**
+   - Vá para [render.com](https://render.com) e faça login
+   - Encontre seu serviço de backend
+
+2. **Vá para Settings**
+   - Clique no seu serviço
+   - Clique na aba **"Settings"**
+
+3. **Corrija o Start Command**
+   - Encontre o campo **"Start Command"**
+   - **Altere de:** `npm run start:prod` 
+   - **Para:** `npm run start`
+
+4. **Salve e Deploy**
+   - Clique em **"Save Changes"**
+   - Clique em **"Manual Deploy"** → **"Deploy latest commit"**
+
+5. **Monitore os Logs**
+   - Vá para a aba **"Logs"**
+   - Verifique se aparece: `"Starting Nest application..."`
+   - Confirme que o servidor está escutando na porta
+
 ## 🧪 Validação
 
 Após aplicar as correções e configurar o Build Command:
