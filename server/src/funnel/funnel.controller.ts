@@ -55,13 +55,25 @@ export class FunnelController {
   @Get('check-table')
   async checkTable() {
     try {
-      const result = await this.supabaseService.checkKommoLeadsSnapshotTable();
+      // Verificar tabelas principais do Supabase
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+      const { data, error } = await client
+        .from('px_leads')
+        .select('*', { count: 'exact', head: true });
+      
       return {
         success: true,
-        tableInfo: result
+        tableInfo: {
+          exists: !error,
+          count: data?.length || 0,
+          error: error?.message
+        }
       };
     } catch (error) {
-      console.error('Error checking kommo_leads_snapshot table:', error);
+      console.error('Error checking px_leads table:', error);
       return {
         success: false,
         error: error.message

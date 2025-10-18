@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useUnifiedOriginSummary } from '@/hooks/useUnifiedOriginSummary';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,19 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
   const [itemsPerPage, setItemsPerPage] = useState(8);
   const [showAll, setShowAll] = useState(false);
   const [minLeadsFilter, setMinLeadsFilter] = useState(1);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detectar se é dispositivo móvel
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   // Processamento dos dados com filtros
   const processedData = useMemo(() => {
@@ -29,12 +42,16 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
     let filteredData = data.filter(item => item.lead_count >= minLeadsFilter);
 
     // Preparar dados para o gráfico com cor única
-    const chartData = filteredData.map(item => ({
-      origem: item.origin_name.length > 20 ? `${item.origin_name.substring(0, 17)}...` : item.origin_name,
-      origemCompleta: item.origin_name,
-      leads: item.lead_count,
-      percentage: ((item.lead_count / filteredData.reduce((sum, d) => sum + d.lead_count, 0)) * 100).toFixed(1)
-    }));
+    const chartData = filteredData.map(item => {
+      // Ajustar comprimento do texto baseado no tamanho da tela
+      const maxLength = isMobile ? 12 : 20;
+      return {
+        origem: item.origin_name.length > maxLength ? `${item.origin_name.substring(0, maxLength - 3)}...` : item.origin_name,
+        origemCompleta: item.origin_name,
+        leads: item.lead_count,
+        percentage: ((item.lead_count / filteredData.reduce((sum, d) => sum + d.lead_count, 0)) * 100).toFixed(1)
+      };
+    });
 
     // Paginação
     const totalPages = Math.ceil(chartData.length / itemsPerPage);
@@ -47,10 +64,27 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
       filteredTotal: chartData.length,
       allData: chartData
     };
-  }, [data, currentPage, itemsPerPage, showAll, minLeadsFilter]);
+  }, [data, currentPage, itemsPerPage, showAll, minLeadsFilter, isMobile]);
 
   // Calcular altura dinâmica do gráfico
   const chartHeight = showAll ? Math.max(400, processedData.allData.length * 40) : 400;
+
+  // Configurações responsivas para o gráfico
+  const chartConfig = useMemo(() => {
+    if (isMobile) {
+      return {
+        margin: { top: 20, right: 20, left: 80, bottom: 20 },
+        yAxisWidth: 70,
+        fontSize: 10
+      };
+    } else {
+      return {
+        margin: { top: 20, right: 60, left: 140, bottom: 20 },
+        yAxisWidth: 130,
+        fontSize: 11
+      };
+    }
+  }, [isMobile]);
 
   if (isLoading) {
     return (
@@ -89,19 +123,19 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
   return (
     <div className="space-y-4">
       {/* Controles */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center sm:gap-4">
         <div className="flex items-center gap-2">
           {/* Badges removidas conforme solicitado */}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {/* Filtro de leads mínimos */}
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <select
               value={minLeadsFilter}
               onChange={(e) => setMinLeadsFilter(Number(e.target.value))}
-              className="text-sm border border-border rounded-md px-3 py-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="text-sm border border-border rounded-md px-3 py-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-auto"
             >
               <option value={1}>Min: 1 lead</option>
               <option value={2}>Min: 2 leads</option>
@@ -115,7 +149,7 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
             variant="outline"
             size="sm"
             onClick={() => setShowAll(!showAll)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full sm:w-auto justify-center"
           >
             {showAll ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             {showAll ? 'Paginar' : 'Ver Tudo'}
@@ -129,27 +163,23 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
           <BarChart
             data={processedData.chartData}
             layout="vertical"
-            margin={{
-              top: 20,
-              right: 60,
-              left: 140,
-              bottom: 20,
-            }}
+            margin={chartConfig.margin}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis 
               type="number"
-              fontSize={11}
+              fontSize={chartConfig.fontSize}
               stroke="hsl(var(--muted-foreground))"
-              tickFormatter={(value) => value.toLocaleString()}
+              tickFormatter={(value) => isMobile ? `${Math.round(value / 1000)}k` : value.toLocaleString()}
             />
             <YAxis 
               dataKey="origem"
               type="category"
-              fontSize={11}
+              fontSize={chartConfig.fontSize}
               stroke="hsl(var(--muted-foreground))"
-              width={130}
-              tick={{ fontSize: 11 }}
+              width={chartConfig.yAxisWidth}
+              tick={{ fontSize: chartConfig.fontSize }}
+              interval={0}
             />
             <Tooltip 
               formatter={(value: number, name, props) => [
@@ -165,7 +195,8 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
                 backgroundColor: 'hsl(var(--background))',
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                fontSize: isMobile ? '12px' : '14px'
               }}
             />
             <Bar 
@@ -203,10 +234,12 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
       )}
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
         <div className="bg-muted/50 p-3 rounded-lg">
           <p className="text-muted-foreground text-xs mb-1">Principal Origem</p>
-          <p className="font-semibold text-sm">{data[0]?.origin_name || 'N/A'}</p>
+          <p className="font-semibold text-sm truncate" title={data[0]?.origin_name || 'N/A'}>
+            {data[0]?.origin_name || 'N/A'}
+          </p>
           <Badge variant="secondary" className="text-xs mt-1">
             {data[0]?.lead_count || 0} leads
           </Badge>

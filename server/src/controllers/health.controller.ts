@@ -1,5 +1,4 @@
 import { Controller, Get, Logger } from '@nestjs/common';
-import { N8nService } from '../services/n8n.service';
 import { DashboardPersistenceService } from '../services/dashboard-persistence.service';
 
 @Controller('health')
@@ -7,7 +6,6 @@ export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
   constructor(
-    private readonly n8nService: N8nService,
     private readonly dashboardService: DashboardPersistenceService,
   ) {}
 
@@ -37,8 +35,7 @@ export class HealthController {
   @Get('detailed')
   async getDetailedHealth() {
     try {
-      const [n8nHealth, dbHealth] = await Promise.allSettled([
-        this.n8nService.healthCheck(),
+      const [dbHealth] = await Promise.allSettled([
         this.dashboardService.checkTableHealth(),
       ]);
 
@@ -49,10 +46,6 @@ export class HealthController {
         environment: process.env.NODE_ENV || 'development',
         version: process.env.npm_package_version || '1.0.0',
         services: {
-          n8n: {
-            status: n8nHealth.status === 'fulfilled' && n8nHealth.value ? 'ok' : 'error',
-            details: n8nHealth.status === 'rejected' ? n8nHealth.reason?.message : null,
-          },
           database: {
             status: dbHealth.status === 'fulfilled' && dbHealth.value.healthy ? 'ok' : 'error',
             details: dbHealth.status === 'fulfilled' ? dbHealth.value.error : dbHealth.reason?.message,

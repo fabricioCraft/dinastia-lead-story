@@ -8,11 +8,7 @@ import { FunnelModule } from './funnel/funnel.module';
 import { SupabaseService } from './services/supabase.service';
 import { SupabaseDebugService } from './services/supabase-debug.service';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { KommoModule } from './kommo/kommo.module';
-import { KommoService } from './services/kommo.service';
-import { KommoSyncWorker } from './services/kommo-sync.worker';
 import { HealthController } from './controllers/health.controller';
-import { N8nService } from './services/n8n.service';
 import { DashboardPersistenceService } from './services/dashboard-persistence.service';
 
 @Module({
@@ -26,26 +22,20 @@ import { DashboardPersistenceService } from './services/dashboard-persistence.se
       // Garante que rotas desconhecidas pela API retornem o index.html (para o React Router funcionar)
       exclude: ['/api*'],
     }),
-    FunnelModule, // Restaurado
-    DashboardModule, // Restaurado
-    KommoModule // Restaurado
+    FunnelModule,
+    DashboardModule
   ],
   controllers: [
     HealthController
   ],
   providers: [
-    SupabaseService, // Adicionado de volta
-    SupabaseDebugService, // Adicionado de volta
-    KommoService, // Restaurado
-    KommoSyncWorker, // Restaurado
-    N8nService,
+    SupabaseService,
+    SupabaseDebugService,
     DashboardPersistenceService
   ],
   exports: [
-    SupabaseService, // Adicionado de volta
-    SupabaseDebugService, // Adicionado de volta
-    KommoService, // Restaurado
-    N8nService,
+    SupabaseService,
+    SupabaseDebugService,
     DashboardPersistenceService
   ],
 })

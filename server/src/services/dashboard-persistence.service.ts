@@ -220,11 +220,10 @@ export class DashboardPersistenceService {
         return { healthy: false, error: 'Cliente Supabase não inicializado' };
       }
 
-      // Temporariamente usando kommo_leads_snapshot como teste de conectividade
-      // TODO: Criar dashboard_data_snapshots quando tivermos chave de serviço
+      // Usando px_leads como teste de conectividade
       const { data, error } = await client
-        .from('kommo_leads_snapshot')
-        .select('lead_id')
+        .from('px_leads')
+        .select('id')
         .limit(1);
 
       if (error) {

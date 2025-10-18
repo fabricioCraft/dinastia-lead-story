@@ -22,15 +22,36 @@ export class FunnelService {
 
   /**
    * Retorna contagem de leads por etapa
-   * Dados obtidos da tabela kommo_leads_snapshot
+   * Dados obtidos das tabelas principais do Supabase
    */
   async getStagesSummary(): Promise<StageSummaryItem[]> {
     try {
-      const data = await this.supabaseService.aggregateKommoLeadsByStatus();
-      
-      return data.map(item => ({
-        stage: item.status_name,
-        count: item.count
+      // Usar dados da tabela lead_stage_history para obter estágios atuais
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+      const { data, error } = await client
+        .from('lead_stage_history')
+        .select('stage_name')
+        .is('exited_at', null); // Apenas estágios atuais (não finalizados)
+
+      if (error) {
+        console.error('Erro ao buscar resumo de estágios:', error);
+        throw new Error(`Erro na consulta: ${error.message}`);
+      }
+
+      // Agrupar por stage_name
+      const stageCounts = new Map<string, number>();
+      data?.forEach(record => {
+        if (record.stage_name) {
+          stageCounts.set(record.stage_name, (stageCounts.get(record.stage_name) || 0) + 1);
+        }
+      });
+
+      return Array.from(stageCounts.entries()).map(([stage, count]) => ({
+        stage,
+        count
       }));
       
     } catch (error) {

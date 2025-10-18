@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { N8nAnalyticsService } from '../services/n8n-analytics.service';
 import { SupabaseService } from '../services/supabase.service';
 
 export interface CampaignSummaryData {
@@ -51,19 +50,77 @@ export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
 
   constructor(
-    private readonly n8nAnalyticsService: N8nAnalyticsService,
     private readonly supabaseService: SupabaseService
   ) {}
 
   async getOriginSummary(days?: number) {
-    // Redirecionar para o N8nAnalyticsService que tem os dados corretos
-    const utmData = await this.n8nAnalyticsService.getLeadsByUtmSource(days);
-    
-    return {
-      kpis: utmData.kpis,
-      leadsByOrigin: utmData.leadsByOrigin,
-      leadsByCampaign: utmData.leadsByOrigin, // Usar os mesmos dados para campanhas
-    };
+    // Usar dados diretamente do Supabase
+    try {
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+
+      // Calcular período se especificado
+      let query = client
+        .from('px_leads')
+        .select('utm_source, utm_campaign')
+        .not('utm_source', 'is', null)
+        .neq('utm_source', '');
+
+      if (days) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        query = query.gte('post_date', startDate.toISOString());
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        this.logger.error('Erro ao buscar dados de origem:', error);
+        throw new Error(`Erro na consulta: ${error.message}`);
+      }
+
+      // Processar dados para agrupar por origem
+      const originCounts = new Map<string, number>();
+      const campaignCounts = new Map<string, number>();
+
+      data?.forEach(lead => {
+        if (lead.utm_source) {
+          originCounts.set(lead.utm_source, (originCounts.get(lead.utm_source) || 0) + 1);
+        }
+        if (lead.utm_campaign) {
+          campaignCounts.set(lead.utm_campaign, (campaignCounts.get(lead.utm_campaign) || 0) + 1);
+        }
+      });
+
+      const leadsByOrigin = Array.from(originCounts.entries()).map(([origin, count]) => ({
+        origin_name: origin,
+        lead_count: count
+      }));
+
+      const leadsByCampaign = Array.from(campaignCounts.entries()).map(([campaign, count]) => ({
+        origin_name: campaign,
+        lead_count: count
+      }));
+
+      return {
+        kpis: {
+          totalLeads: data?.length || 0,
+          totalOrigins: originCounts.size,
+          totalCampaigns: campaignCounts.size
+        },
+        leadsByOrigin,
+        leadsByCampaign
+      };
+    } catch (error) {
+      this.logger.error('Erro ao obter resumo de origem:', error);
+      return {
+        kpis: { totalLeads: 0, totalOrigins: 0, totalCampaigns: 0 },
+        leadsByOrigin: [],
+        leadsByCampaign: []
+      };
+    }
   }
 
   async getFunnelBreakdownForOrigin(origin: string, days?: number): Promise<{ status: string; count: number }[]> {

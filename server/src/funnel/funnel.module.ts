@@ -4,12 +4,11 @@ import { FunnelController } from './funnel.controller';
 import { FunnelService } from './funnel.service';
 import { TestSqlController } from './test-sql.controller';
 import { SupabaseService } from '../services/supabase.service';
-import { KommoService } from '../services/kommo.service';
 import { LeadStageHistoryService } from '../services/lead-stage-history.service';
 
 @Module({
   imports: [ConfigModule],
   controllers: [FunnelController, TestSqlController],
-  providers: [FunnelService, SupabaseService, KommoService, LeadStageHistoryService],
+  providers: [FunnelService, SupabaseService, LeadStageHistoryService],
 })
 export class FunnelModule {}

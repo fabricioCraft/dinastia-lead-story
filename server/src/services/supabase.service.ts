@@ -19,127 +19,11 @@ export class SupabaseService {
     return this.client;
   }
 
-  // Upsert dos leads do Kommo no snapshot local
-  async upsertKommoLeadsSnapshot(rows: Array<{ lead_id: number; status_name: string; pipeline_id?: number; updated_at: string }>): Promise<{ success: boolean; processed: number; errors: string[] }> {
-    console.log(`🚀 INÍCIO upsertKommoLeadsSnapshot: ${rows.length} registros recebidos`);
-    if (!this.client) return { success: false, processed: 0, errors: ['Supabase client not initialized'] };
-    if (rows.length === 0) return { success: true, processed: 0, errors: [] };
-    
-    console.log('🔍 Dados para upsert:', JSON.stringify(rows[0], null, 2));
-    
-    const chunkSize = Number(process.env.SUPABASE_CHUNK_SIZE ?? 500);
-    let total = 0;
-    const errors: string[] = [];
-    
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      try {
-        console.log(`🔄 Processando chunk ${i / chunkSize + 1} com ${chunk.length} registros...`);
-        
-        // Usar colunas básicas e todas as colunas de timestamp corretas
-        const cleanedChunk = chunk.map(row => {
-          const cleanedRow = {
-            lead_id: row.lead_id,
-            current_status_name: row.status_name,
-            // Incluir apenas as colunas de timestamp que realmente existem na tabela
-            ts_novos_leads: (row as any).ts_novos_leads || null,
-            ts_tentado_conexao: (row as any).ts_tentado_conexao || null,
-            ts_conectado_qualificacao: (row as any).ts_conectado_qualificacao || null,
-            ts_noshow: (row as any).ts_noshow || null,
-            ts_reuniao: (row as any).ts_reuniao || null,
-            ts_oportunidade: (row as any).ts_oportunidade || null,
-            ts_negociacao: (row as any).ts_negociacao || null,
-            ts_venda_realizada: (row as any).ts_venda_realizada || null,
-            updated_at: row.updated_at
-          };
-          console.log(`🔍 DEBUG: Linha limpa para lead ${row.lead_id}:`, cleanedRow);
-          return cleanedRow;
-        });
-        
-        // Usar upsert nativo do Supabase
-        console.log(`🔍 DEBUG: Tentando upsert de ${cleanedChunk.length} registros...`);
-        console.log(`🔍 DEBUG: Primeiro registro do chunk:`, cleanedChunk[0]);
-        
-        const { data, error } = await this.client
-          .from('kommo_leads_snapshot')
-          .upsert(cleanedChunk, { onConflict: 'lead_id' })
-          .select();
-          
-        console.log(`🔍 DEBUG: Resultado do upsert - data:`, data?.length || 0, 'registros');
-        console.log(`🔍 DEBUG: Resultado do upsert - error:`, error);
-        
-        if (error) {
-          console.error('Supabase upsertKommoLeadsSnapshot error:', error.message);
-          errors.push(`Chunk ${i / chunkSize + 1}: ${error.message}`);
-          continue;
-        }
-        
-        console.log(`✅ Chunk processado com sucesso. Registros retornados:`, data?.length || 0);
-        total += chunk.length;
-      } catch (e: any) {
-        const errorMsg = e?.message ?? String(e);
-        console.error('Supabase upsertKommoLeadsSnapshot unexpected error:', errorMsg);
-        errors.push(`Chunk ${i / chunkSize + 1}: ${errorMsg}`);
-      }
-    }
-    
-    return { 
-      success: errors.length === 0, 
-      processed: total, 
-      errors 
-    };
-  }
 
-  // Verificar se a tabela kommo_leads_snapshot existe
-  async checkKommoLeadsSnapshotTable(): Promise<{ exists: boolean; error?: string }> {
-    if (!this.client) return { exists: false, error: 'Supabase client not initialized' };
-    try {
-      const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('lead_id')
-        .limit(1);
-      
-      if (error) {
-        return { exists: false, error: error.message };
-      }
-      
-      return { exists: true };
-    } catch (e: any) {
-      return { exists: false, error: e?.message ?? String(e) };
-    }
-  }
 
-  // Agregação rápida de leads por status usando tabela snapshot
-  async aggregateKommoLeadsByStatus(): Promise<Array<{ status_name: string; count: number }>> {
-    if (!this.client) return [];
-    try {
-      // Busca todos os leads e agrupa manualmente
-      const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('status_name');
-      
-      if (error) {
-        console.error('Supabase aggregateKommoLeadsByStatus error:', error.message);
-        return [];
-      }
-      
-      // Agrupa os dados manualmente
-      const statusCounts = new Map<string, number>();
-      data?.forEach(row => {
-        const statusName = row.status_name || 'Unknown';
-        statusCounts.set(statusName, (statusCounts.get(statusName) || 0) + 1);
-      });
-      
-      return Array.from(statusCounts.entries()).map(([status_name, count]) => ({
-        status_name,
-        count
-      }));
-      
-    } catch (e: any) {
-      console.error('Supabase aggregateKommoLeadsByStatus error:', e?.message ?? String(e));
-      return [];
-    }
-  }
+
+
+
 
   // Calcula tempo médio na etapa atual para cada status
   async getAverageTimeInStage(): Promise<Array<{ status_name: string; avg_duration: string }>> {
@@ -268,60 +152,7 @@ export class SupabaseService {
     }
   }
 
-  /**
-   * Busca todos os leads do snapshot para comparação de transições
-   * Usado pela nova arquitetura de rastreamento de timestamps
-   */
-  async getAllKommoLeadsSnapshot(): Promise<any[]> {
-    if (!this.client) return [];
-    
-    try {
-      const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('*');
-      
-      if (error) {
-        console.error('Supabase getAllKommoLeadsSnapshot error:', error.message);
-        return [];
-      }
-      
-      return data || [];
-      
-    } catch (e: any) {
-      console.error('Supabase getAllKommoLeadsSnapshot error:', e?.message ?? String(e));
-      return [];
-    }
-  }
 
-  /**
-   * Busca um lead específico por ID do snapshot
-   */
-  async getKommoLeadSnapshotById(leadId: number): Promise<any | null> {
-    if (!this.client) return null;
-    
-    try {
-      const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('*')
-        .eq('lead_id', leadId)
-        .single();
-      
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // Lead não encontrado
-          return null;
-        }
-        console.error('Supabase getKommoLeadSnapshotById error:', error.message);
-        return null;
-      }
-      
-      return data;
-      
-    } catch (e: any) {
-      console.error('Supabase getKommoLeadSnapshotById error:', e?.message ?? String(e));
-      return null;
-    }
-  }
 
   /**
    * Calcula tempo médio por etapa usando timestamps da nova arquitetura
@@ -427,21 +258,21 @@ export class SupabaseService {
     if (!this.client) return [];
     
     try {
-      // Buscar total de leads únicos
+      // Buscar total de leads únicos na tabela px_leads
       const { count: totalLeads, error: totalError } = await this.client
-        .from('kommo_leads_snapshot')
-        .select('lead_id', { count: 'exact', head: true });
+        .from('px_leads')
+        .select('id', { count: 'exact', head: true });
       
       if (totalError) {
         console.error('Supabase getSchedulingRate totalLeads error:', totalError.message);
         return [{ scheduling_rate: null }];
       }
       
-      // Buscar leads que têm timestamp de agendamento
+      // Buscar leads que têm agendamento na tabela lead_stage_history
       const { count: scheduledLeads, error: scheduledError } = await this.client
-        .from('kommo_leads_snapshot')
+        .from('lead_stage_history')
         .select('lead_id', { count: 'exact', head: true })
-        .not('ts_agendados', 'is', null);
+        .eq('stage_name', 'Agendado');
       
       if (scheduledError) {
         console.error('Supabase getSchedulingRate scheduledLeads error:', scheduledError.message);

@@ -1,14 +1,12 @@
 import { Controller, Get, Post, Logger, Body } from '@nestjs/common';
 import { SupabaseService } from '../services/supabase.service';
-import { KommoService } from '../services/kommo.service';
 
 @Controller('test-sql')
 export class TestSqlController {
   private readonly logger = new Logger(TestSqlController.name);
 
   constructor(
-    private readonly supabaseService: SupabaseService,
-    private readonly kommoService: KommoService
+    private readonly supabaseService: SupabaseService
   ) {}
 
   @Get('test-timestamp-function')
@@ -32,18 +30,31 @@ export class TestSqlController {
   @Get('check-snapshot-table')
   async checkSnapshotTable() {
     try {
-      const snapshots = await this.supabaseService.getAllKommoLeadsSnapshot();
+      // Verificar tabela px_leads ao invés de kommo_leads_snapshot
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+      const { data, error } = await client
+        .from('px_leads')
+        .select('*')
+        .limit(3);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
       return {
         success: true,
-        count: snapshots.length,
-        sample: snapshots.slice(0, 3), // Primeiros 3 registros como amostra
-        message: 'Snapshot table accessed successfully'
+        count: data?.length || 0,
+        sample: data || [],
+        message: 'px_leads table accessed successfully'
       };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
-        message: 'Failed to access snapshot table'
+        message: 'Failed to access px_leads table'
       };
     }
   }
@@ -75,7 +86,7 @@ export class TestSqlController {
       }
 
       const result = await client
-        .from('kommo_leads_snapshot')
+        .from('px_leads')
         .select('lead_id, current_status_name, ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada')
         .or('ts_novos_leads.not.is.null,ts_tentado_conexao.not.is.null,ts_conectado_qualificacao.not.is.null,ts_noshow.not.is.null,ts_reuniao.not.is.null,ts_oportunidade.not.is.null,ts_negociacao.not.is.null,ts_venda_realizada.not.is.null')
         .limit(10);
@@ -98,16 +109,16 @@ export class TestSqlController {
   @Get('test-direct-sql')
   async testDirectSql() {
     try {
-      // Testar uma query simples primeiro
+      // Testar uma query simples na tabela px_leads
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
       const result = await client
-        .from('kommo_leads_snapshot')
+        .from('px_leads')
         .select('count(*)')
-        .not('ts_tentado_conexao', 'is', null);
+        .not('created_at', 'is', null);
 
       return {
         success: true,
@@ -126,22 +137,23 @@ export class TestSqlController {
   @Get('create-new-function')
   async createNewFunction() {
     try {
-      // Executar o SQL para criar a nova função
+      // Executar o SQL para criar a nova função baseada em lead_stage_history
       const sqlFunction = `
         CREATE OR REPLACE FUNCTION calculate_stage_durations_with_ongoing()
         RETURNS TABLE(stage_name TEXT, avg_duration_seconds NUMERIC) AS $$
         BEGIN
           RETURN QUERY
           
-          -- Duração em 'Tentado Conexão' = (Tempo de entrada em 'Conectado/Qualificação' OU AGORA) - (Tempo de entrada em 'Tentado Conexão')
+          -- Calcular duração média por estágio baseado no histórico
           SELECT 
-            'Tentado Conexão'::TEXT as stage_name,
+            lsh.stage_name::TEXT as stage_name,
             COALESCE(
-              AVG(EXTRACT(EPOCH FROM (COALESCE(ts_conectado_qualificacao, NOW()) - ts_tentado_conexao))),
+              AVG(EXTRACT(EPOCH FROM (COALESCE(lsh.exited_at, NOW()) - lsh.entered_at))),
               0
             )::NUMERIC as avg_duration_seconds
-          FROM kommo_leads_snapshot 
-          WHERE ts_tentado_conexao IS NOT NULL;
+          FROM lead_stage_history lsh
+          WHERE lsh.entered_at IS NOT NULL
+          GROUP BY lsh.stage_name;
 
         END;
         $$ LANGUAGE plpgsql;
@@ -171,21 +183,33 @@ export class TestSqlController {
   @Get('debug-sync-data')
   async debugSyncData() {
     try {
-        // Buscar dados do Kommo
-        const leadsFromKommo = await this.kommoService.getLeadsFromPipeline();
+        // Buscar dados das tabelas principais
+        const client = this.supabaseService.getClient();
+        if (!client) {
+          throw new Error('Cliente Supabase não inicializado');
+        }
         
-        // Buscar dados do snapshot
-        const snapshotData = await this.supabaseService.getAllKommoLeadsSnapshot();
+        const { data: leadsData, error: leadsError } = await client
+          .from('px_leads')
+          .select('*')
+          .limit(2);
+        
+        const { data: stageData, error: stageError } = await client
+          .from('lead_stage_history')
+          .select('*')
+          .limit(2);
         
         return {
           success: true,
-          kommo: {
-            count: leadsFromKommo.length,
-            sample: leadsFromKommo.slice(0, 2)
+          px_leads: {
+            count: leadsData?.length || 0,
+            sample: leadsData || [],
+            error: leadsError?.message
           },
-          snapshot: {
-            count: snapshotData.length,
-            sample: snapshotData.slice(0, 2)
+          stage_history: {
+            count: stageData?.length || 0,
+            sample: stageData || [],
+            error: stageError?.message
           }
         };
        } catch (error) {
@@ -196,137 +220,137 @@ export class TestSqlController {
        }
    }
 
-   @Get('debug-pipelines')
-   async debugPipelines() {
-     try {
-       // Usar método público do KommoService para acessar informações de pipelines
-       const pipelinesInfo = await this.kommoService.getPipelinesInfo();
-       
-       return pipelinesInfo;
-     } catch (error) {
-       return {
-         success: false,
-         error: error instanceof Error ? error.message : 'Erro desconhecido'
-       };
-     }
-    }
+   // @Get('debug-pipelines')
+   // async debugPipelines() {
+   //   try {
+   //     // Usar método público do KommoService para acessar informações de pipelines
+   //     const pipelinesInfo = await this.kommoService.getPipelinesInfo();
+   //     
+   //     return pipelinesInfo;
+   //   } catch (error) {
+   //     return {
+   //       success: false,
+   //       error: error instanceof Error ? error.message : 'Erro desconhecido'
+   //     };
+   //   }
+   //  }
 
-    @Get('debug-status-endpoints')
-    async debugStatusEndpoints() {
-      try {
-        const results: any[] = [];
-        
-        // Tentar diferentes endpoints para buscar status
-        try {
-          const pipelinesWithStatus = await (this.kommoService as any).apiClient.get('/leads/pipelines', {
-            params: { with: 'statuses' }
-          });
-          results.push({
-            endpoint: '/leads/pipelines?with=statuses',
-            success: true,
-            data: pipelinesWithStatus.data._embedded?.pipelines?.map(p => ({
-              id: p.id,
-              name: p.name,
-              statusCount: p.statuses?.length || 0
-            })) || []
-          });
-        } catch (error) {
-          results.push({
-            endpoint: '/leads/pipelines?with=statuses',
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
-          });
-        }
+    // @Get('debug-status-endpoints')
+    // async debugStatusEndpoints() {
+    //   try {
+    //     const results: any[] = [];
+    //     
+    //     // Tentar diferentes endpoints para buscar status
+    //     try {
+    //       const pipelinesWithStatus = await (this.kommoService as any).apiClient.get('/leads/pipelines', {
+    //         params: { with: 'statuses' }
+    //       });
+    //       results.push({
+    //         endpoint: '/leads/pipelines?with=statuses',
+    //         success: true,
+    //         data: pipelinesWithStatus.data._embedded?.pipelines?.map(p => ({
+    //           id: p.id,
+    //           name: p.name,
+    //           statusCount: p.statuses?.length || 0
+    //         })) || []
+    //       });
+    //     } catch (error) {
+    //       results.push({
+    //         endpoint: '/leads/pipelines?with=statuses',
+    //         success: false,
+    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
+    //       });
+    //     }
 
-        // Tentar endpoint específico de status
-        try {
-          const statusResponse = await (this.kommoService as any).apiClient.get('/leads/statuses');
-          results.push({
-            endpoint: '/leads/statuses',
-            success: true,
-            data: statusResponse.data
-          });
-        } catch (error) {
-          results.push({
-            endpoint: '/leads/statuses',
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
-          });
-        }
+    //     // Tentar endpoint específico de status
+    //     try {
+    //       const statusResponse = await (this.kommoService as any).apiClient.get('/leads/statuses');
+    //       results.push({
+    //         endpoint: '/leads/statuses',
+    //         success: true,
+    //         data: statusResponse.data
+    //       });
+    //     } catch (error) {
+    //       results.push({
+    //         endpoint: '/leads/statuses',
+    //         success: false,
+    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
+    //       });
+    //     }
 
-        // Tentar buscar um pipeline específico
-        try {
-          const pipelineId = (this.kommoService as any).pipelineId;
-          const specificPipeline = await (this.kommoService as any).apiClient.get(`/leads/pipelines/${pipelineId}`);
-          results.push({
-            endpoint: `/leads/pipelines/${pipelineId}`,
-            success: true,
-            data: {
-              id: specificPipeline.data.id,
-              name: specificPipeline.data.name,
-              statusCount: specificPipeline.data.statuses?.length || 0,
-              statuses: specificPipeline.data.statuses?.map(s => ({ id: s.id, name: s.name })) || []
-            }
-          });
-        } catch (error) {
-          results.push({
-            endpoint: `/leads/pipelines/${(this.kommoService as any).pipelineId}`,
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
-          });
-        }
+    //     // Tentar buscar um pipeline específico
+    //     try {
+    //       const pipelineId = (this.kommoService as any).pipelineId;
+    //       const specificPipeline = await (this.kommoService as any).apiClient.get(`/leads/pipelines/${pipelineId}`);
+    //       results.push({
+    //         endpoint: `/leads/pipelines/${pipelineId}`,
+    //         success: true,
+    //         data: {
+    //           id: specificPipeline.data.id,
+    //           name: specificPipeline.data.name,
+    //           statusCount: specificPipeline.data.statuses?.length || 0,
+    //           statuses: specificPipeline.data.statuses?.map(s => ({ id: s.id, name: s.name })) || []
+    //         }
+    //       });
+    //     } catch (error) {
+    //       results.push({
+    //         endpoint: `/leads/pipelines/${(this.kommoService as any).pipelineId}`,
+    //         success: false,
+    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
+    //       });
+    //     }
 
-        return {
-          success: true,
-          results
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Erro desconhecido'
-        };
-      }
-     }
+    //     return {
+    //       success: true,
+    //       results
+    //     };
+    //   } catch (error) {
+    //     return {
+    //       success: false,
+    //       error: error instanceof Error ? error.message : 'Erro desconhecido'
+    //     };
+    //   }
+    //  }
 
-     @Get('debug-lead-structure')
-     async debugLeadStructure() {
-       try {
-         // Buscar alguns leads com mais detalhes
-         const leadsResponse = await (this.kommoService as any).apiClient.get('/leads', {
-           params: {
-             limit: 3,
-             with: 'custom_fields,pipeline,status',
-             filter: {
-               pipeline_id: (this.kommoService as any).pipelineId
-             }
-           }
-         });
+     // @Get('debug-lead-structure')
+     // async debugLeadStructure() {
+     //   try {
+     //     // Buscar alguns leads com mais detalhes
+     //     const leadsResponse = await (this.kommoService as any).apiClient.get('/leads', {
+     //       params: {
+     //         limit: 3,
+     //         with: 'custom_fields,pipeline,status',
+     //         filter: {
+     //           pipeline_id: (this.kommoService as any).pipelineId
+     //         }
+     //       }
+     //     });
 
-         const leads = leadsResponse.data._embedded?.leads || [];
-         
-         return {
-           success: true,
-           totalLeads: leads.length,
-           leadsStructure: leads.map(lead => ({
-             id: lead.id,
-             status_id: lead.status_id,
-             pipeline_id: lead.pipeline_id,
-             name: lead.name,
-             // Verificar se há informações de status em outros campos
-             allFields: Object.keys(lead),
-             // Verificar se há dados embedded
-             embedded: lead._embedded ? Object.keys(lead._embedded) : null,
-             // Verificar se há links
-             links: lead._links ? Object.keys(lead._links) : null
-           }))
-         };
-       } catch (error) {
-         return {
-           success: false,
-           error: error.message
-         };
-       }
-      }
+     //     const leads = leadsResponse.data._embedded?.leads || [];
+     //     
+     //     return {
+     //       success: true,
+     //       totalLeads: leads.length,
+     //       leadsStructure: leads.map(lead => ({
+     //         id: lead.id,
+     //         status_id: lead.status_id,
+     //         pipeline_id: lead.pipeline_id,
+     //         name: lead.name,
+     //         // Verificar se há informações de status em outros campos
+     //         allFields: Object.keys(lead),
+     //         // Verificar se há dados embedded
+     //         embedded: lead._embedded ? Object.keys(lead._embedded) : null,
+     //         // Verificar se há links
+     //         links: lead._links ? Object.keys(lead._links) : null
+     //       }))
+     //     };
+     //   } catch (error) {
+     //     return {
+     //       success: false,
+     //       error: error.message
+     //     };
+     //   }
+     //  }
 
       @Get('check-lead-stage-durations-table')
       async checkLeadStageDurationsTable() {
@@ -363,35 +387,35 @@ export class TestSqlController {
         }
       }
 
-      @Get('debug-upsert-process')
-      async debugUpsertProcess() {
-        try {
-          // Buscar alguns leads do Kommo
-          const leadsFromKommo = await this.kommoService.getLeadsFromPipeline();
-          const sampleLeads = leadsFromKommo.slice(0, 3); // Apenas 3 leads para teste
-          
-          // Tentar fazer upsert manual
-          this.logger.log('🧪 Testando upsert manual de 3 leads...');
-          const upsertResult = await this.supabaseService.upsertKommoLeadsSnapshot(sampleLeads);
-          
-          // Verificar se foram inseridos
-          const afterUpsert = await this.supabaseService.getAllKommoLeadsSnapshot();
-          
-          return {
-            success: true,
-            sampleLeads,
-            upsertResult,
-            afterUpsertCount: afterUpsert.length,
-            afterUpsertSample: afterUpsert.slice(0, 3)
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido',
-            stack: error.stack
-          };
-        }
-      }
+      // @Get('debug-upsert-process')
+      // async debugUpsertProcess() {
+      //   try {
+      //     // Buscar alguns leads do Kommo
+      //     const leadsFromKommo = await this.kommoService.getLeadsFromPipeline();
+      //     const sampleLeads = leadsFromKommo.slice(0, 3); // Apenas 3 leads para teste
+      //     
+      //     // Tentar inserir leads na tabela px_leads
+      //     this.logger.log('🧪 Testando inserção de 3 leads na tabela px_leads...');
+      //     const insertResult = await this.supabaseService.insertTestRecord('px_leads', sampleLeads);
+      //     
+      //     // Verificar se foram inseridos
+      //     const afterInsert = await this.supabaseService.selectFromTable('px_leads', 10);
+      //     
+      //     return {
+      //       success: true,
+      //       sampleLeads,
+      //       insertResult,
+      //       afterInsertCount: afterInsert.data?.length || 0,
+      //       afterInsertSample: afterInsert.data?.slice(0, 3) || []
+      //     };
+      //   } catch (error) {
+      //     return {
+      //       success: false,
+      //       error: error instanceof Error ? error.message : 'Erro desconhecido',
+      //       stack: error.stack
+      //     };
+      //   }
+      // }
 
       @Get('debug-table-structure')
       async debugTableStructure() {
@@ -614,28 +638,26 @@ export class TestSqlController {
   @Get('check-data')
   async checkData() {
     try {
-      // Buscar todos os registros da tabela
-      const allSnapshots = await this.supabaseService.getAllKommoLeadsSnapshot();
+      // Buscar todos os leads da tabela px_leads
+      const allLeads = await this.supabaseService.selectFromTable('px_leads', 100);
       
-      // Filtrar registros que têm timestamps preenchidos
-      const recordsWithTimestamps = allSnapshots.filter(record => 
-        record.ts_novos_leads || 
-        record.ts_tentado_conexao || 
-        record.ts_conectado_qualificacao ||
-        record.ts_noshow ||
-        record.ts_reuniao ||
-        record.ts_oportunidade ||
-        record.ts_negociacao
-      );
+      // Filtrar registros que têm dados válidos
+      const recordsWithData = allLeads.data?.filter(record => 
+        record.created_at || 
+        record.utm_source || 
+        record.utm_campaign ||
+        record.email ||
+        record.phone
+      ) || [];
 
       return {
         success: true,
-        totalRecords: allSnapshots.length,
-        sampleRecords: allSnapshots.slice(0, 5),
-        recordsWithTimestamps: recordsWithTimestamps.slice(0, 5),
-        timestampStats: {
-          total: recordsWithTimestamps.length,
-          percentage: allSnapshots.length > 0 ? (recordsWithTimestamps.length / allSnapshots.length * 100).toFixed(2) + '%' : '0%'
+        totalRecords: allLeads.data?.length || 0,
+        sampleRecords: allLeads.data?.slice(0, 5) || [],
+        recordsWithData: recordsWithData.slice(0, 5),
+        dataStats: {
+          total: recordsWithData.length,
+          percentage: allLeads.data?.length > 0 ? (recordsWithData.length / allLeads.data.length * 100).toFixed(2) + '%' : '0%'
         },
         message: 'Dados verificados com sucesso'
       };
