@@ -11,6 +11,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { KommoModule } from './kommo/kommo.module';
 import { KommoService } from './services/kommo.service';
 import { KommoSyncWorker } from './services/kommo-sync.worker';
+import { HealthController } from './controllers/health.controller';
+import { N8nService } from './services/n8n.service';
+import { DashboardPersistenceService } from './services/dashboard-persistence.service';
 
 @Module({
   imports: [
@@ -27,16 +30,23 @@ import { KommoSyncWorker } from './services/kommo-sync.worker';
     DashboardModule, // Restaurado
     KommoModule // Restaurado
   ],
+  controllers: [
+    HealthController
+  ],
   providers: [
     SupabaseService, // Adicionado de volta
     SupabaseDebugService, // Adicionado de volta
     KommoService, // Restaurado
-    KommoSyncWorker // Restaurado
+    KommoSyncWorker, // Restaurado
+    N8nService,
+    DashboardPersistenceService
   ],
   exports: [
     SupabaseService, // Adicionado de volta
     SupabaseDebugService, // Adicionado de volta
-    KommoService // Restaurado
+    KommoService, // Restaurado
+    N8nService,
+    DashboardPersistenceService
   ],
 })
 export class AppModule {}
