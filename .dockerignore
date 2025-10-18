@@ -1,0 +1,14 @@
+# Dependências locais (serão instaladas dentro do container)
+node_modules
+server/node_modules
+
+# Arquivos de build locais (serão criados dentro do container)
+dist
+server/dist
+
+# Logs e arquivos de sistema
+npm-debug.log*
+.DS_Store
+
+# Pasta do Git
+.git
