@@ -242,36 +242,108 @@ export class DashboardService {
     endDate?: string
   ): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log('Usando método fallback para volume diário de leads');
+      this.logger.log('Buscando volume diário de leads exclusivamente da tabela leads2');
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Buscar TODOS os dados de leads2 usando paginação
+      // Construir query SQL para buscar dados agregados diretamente do Supabase
+      let sqlQuery = `
+        SELECT 
+          -- Agrupa os timestamps por dia e formata para 'YYYY-MM-DD'
+          DATE_TRUNC('day', datacriacao)::date AS day, 
+          -- Conta o número total de leads que caem em cada dia
+          COUNT(chatid) AS total_leads_per_day 
+        FROM 
+          public.leads2 
+        WHERE 
+          datacriacao IS NOT NULL`;
+
+      // Adicionar filtros de data se fornecidos
+      const queryParams: any[] = [];
+      if (startDate) {
+        queryParams.push(`${startDate}T00:00:00.000Z`);
+        sqlQuery += ` AND datacriacao >= $${queryParams.length}`;
+      }
+      if (endDate) {
+        const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+        queryParams.push(endExclusive.toISOString());
+        sqlQuery += ` AND datacriacao < $${queryParams.length}`;
+      }
+
+      sqlQuery += `
+        GROUP BY 
+          day 
+        ORDER BY 
+          day ASC`;
+
+      this.logger.log(`Executando query SQL: ${sqlQuery}`);
+      this.logger.log(`Parâmetros: ${JSON.stringify(queryParams)}`);
+
+      // Executar a query usando rpc para ter mais controle
+      const { data, error } = await client.rpc('execute_sql', {
+        sql_query: sqlQuery,
+        params: queryParams
+      });
+
+      if (error) {
+        this.logger.error('Erro ao executar query SQL:', error);
+        // Fallback para busca manual se a função execute_sql não estiver disponível
+        return await this.getDailyLeadVolumeManualFallback(startDate, endDate);
+      }
+
+      this.logger.log(`Query retornou ${data?.length || 0} registros de volume diário`);
+      return data || [];
+
+    } catch (error) {
+      this.logger.error('Erro ao buscar volume diário de leads:', error);
+      // Fallback para busca manual em caso de erro
+      return await this.getDailyLeadVolumeManualFallback(startDate, endDate);
+    }
+  }
+
+  /**
+   * Fallback manual para buscar volume diário quando a função SQL não está disponível
+   * Usa apenas a tabela leads2
+   */
+  private async getDailyLeadVolumeManualFallback(
+    startDate?: string,
+    endDate?: string
+  ): Promise<DailyLeadVolumeData[]> {
+    try {
+      this.logger.log('Usando fallback manual para volume diário de leads (apenas leads2)');
+
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+
+      // Buscar dados de leads2 usando paginação
       const leads2Data: any[] = [];
       let page = 0;
       const pageSize = 1000; // Máximo permitido pelo Supabase
       let hasMoreLeads2 = true;
 
       while (hasMoreLeads2) {
-        let query1 = client
+        let query = client
           .from('leads2')
-          .select('datacriacao')
+          .select('datacriacao, chatid')
           .not('datacriacao', 'is', null)
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (startDate) {
-          query1 = query1.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+          query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
         }
         if (endDate) {
           const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
           endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-          query1 = query1.lt('datacriacao', endExclusive.toISOString());
+          query = query.lt('datacriacao', endExclusive.toISOString());
         }
 
-        const { data: pageData, error: pageError } = await query1;
+        const { data: pageData, error: pageError } = await query;
         
         if (pageError) {
           this.logger.error(`Erro ao buscar página ${page} de leads2:`, pageError);
@@ -287,59 +359,14 @@ export class DashboardService {
         page++;
       }
 
-      // Buscar TODOS os dados de MR_base_leads usando paginação
-      const mrLeadsData: any[] = [];
-      page = 0;
-      let hasMoreMrLeads = true;
+      this.logger.log(`Total de registros coletados da leads2: ${leads2Data.length}`);
 
-      while (hasMoreMrLeads) {
-        let query2 = client
-          .from('MR_base_leads')
-          .select('created_at')
-          .not('created_at', 'is', null)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (startDate) {
-          query2 = query2.gte('created_at', `${startDate}T00:00:00.000Z`);
-        }
-        if (endDate) {
-          const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
-          endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-          query2 = query2.lt('created_at', endExclusive.toISOString());
-        }
-
-        const { data: pageData, error: pageError } = await query2;
-        
-        if (pageError) {
-          this.logger.error(`Erro ao buscar página ${page} de MR_base_leads:`, pageError);
-          throw new Error(`Erro na consulta MR_base_leads página ${page}: ${pageError.message}`);
-        }
-
-        if (pageData && pageData.length > 0) {
-          mrLeadsData.push(...pageData);
-          this.logger.log(`Página ${page} de MR_base_leads: ${pageData.length} registros`);
-        }
-
-        hasMoreMrLeads = pageData && pageData.length === pageSize;
-        page++;
-      }
-
-      this.logger.log(`Total de registros coletados - leads2: ${leads2Data.length}, MR_base_leads: ${mrLeadsData.length}`);
-
-      // Combinar e agregar os dados manualmente
+      // Agregar os dados manualmente por dia
       const dailyCounts = new Map<string, number>();
 
-      // Processar leads2
+      // Processar apenas leads2
       (leads2Data || []).forEach((lead: any) => {
         const date = new Date(lead.datacriacao);
-        // Usar fuso horário brasileiro (UTC-3) para evitar problemas de data
-        const day = new Date(date.getTime() - (3 * 60 * 60 * 1000)).toISOString().split('T')[0]; // YYYY-MM-DD
-        dailyCounts.set(day, (dailyCounts.get(day) || 0) + 1);
-      });
-
-      // Processar MR_base_leads
-      (mrLeadsData || []).forEach((lead: any) => {
-        const date = new Date(lead.created_at);
         // Usar fuso horário brasileiro (UTC-3) para evitar problemas de data
         const day = new Date(date.getTime() - (3 * 60 * 60 * 1000)).toISOString().split('T')[0]; // YYYY-MM-DD
         dailyCounts.set(day, (dailyCounts.get(day) || 0) + 1);
@@ -353,11 +380,11 @@ export class DashboardService {
         }))
         .sort((a, b) => a.day.localeCompare(b.day));
 
-      this.logger.log(`Fallback retornando ${result.length} registros de volume diário`);
+      this.logger.log(`Fallback manual retornando ${result.length} registros de volume diário`);
       return result;
 
     } catch (error) {
-      this.logger.error('Erro no método fallback de volume diário:', error);
+      this.logger.error('Erro no fallback manual de volume diário:', error);
       throw error;
     }
   }
@@ -753,7 +780,7 @@ export class DashboardService {
 
   async getUnifiedOriginSummary(days?: number, fromDate?: Date, toDate?: Date): Promise<UnifiedOriginSummaryData[]> {
     try {
-      this.logger.log('Buscando dados unificados de origem dos leads...');
+      this.logger.log('Buscando dados de origem dos leads exclusivamente da tabela leads2...');
       
       const client = this.supabaseService.getClient();
       if (!client) {
@@ -776,67 +803,125 @@ export class DashboardService {
         startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
       }
 
-      this.logger.log(`Filtrando dados de origem entre ${startDate.toISOString()} e ${endDate.toISOString()}`);
+      // Ajustar para o fuso horário brasileiro (UTC-3)
+      const startDateBR = new Date(startDate.getTime() - 3 * 60 * 60 * 1000);
+      const endDateBR = new Date(endDate.getTime() - 3 * 60 * 60 * 1000);
 
-      // Função para buscar registros com filtro de data
-      const fetchFilteredRecords = async (tableName: string, column: string, dateColumn: string) => {
-        const allData: any[] = [];
-        let from = 0;
-        const pageSize = 1000;
-        let hasMore = true;
+      this.logger.log(`Filtrando dados de origem entre ${startDateBR.toISOString()} e ${endDateBR.toISOString()} (horário brasileiro)`);
 
-        while (hasMore) {
-          let query = client
-            .from(tableName)
-            .select(`${column}, ${dateColumn}`)
-            .gte(dateColumn, startDate.toISOString())
-            .lte(dateColumn, endDate.toISOString())
-            .range(from, from + pageSize - 1);
+      // Tentar usar a função execute_sql primeiro
+      try {
+        const sqlQuery = `
+          SELECT 
+            normalized_origin AS origin_name, 
+            COUNT(*) AS lead_count 
+          FROM ( 
+            SELECT 
+              CASE 
+                WHEN origem ILIKE '%ISCA SCOPELINE%' THEN 'Isca Scopeline'
+                WHEN origem ILIKE '%ISCA HORMOZI%' THEN 'Isca Hormozi'
+                WHEN origem ILIKE '%MASTERCLASS%' THEN 'Masterclass'
+                WHEN origem ILIKE '%MANYCHAT%' THEN 'Manychat'
+                WHEN origem ILIKE '%STARTER10K%' THEN 'Starter10k'
+                WHEN origem ILIKE '%AGENDAMENTO%' THEN 'Agendamento'
+                WHEN origem ILIKE '%DESAFIO%' THEN 'Desafio'
+                WHEN origem ILIKE '%YOUTUBE%' OR origem ILIKE '%YT-%' THEN 'YouTube'
+                WHEN origem ILIKE '%CALENDLY%' THEN 'Calendly'
+                WHEN origem ILIKE '%VENDA%' THEN 'Venda'
+                WHEN origem ILIKE '%GOOGLE ADS%' OR origem ILIKE '%GOOGLE%' THEN 'Google Ads'
+                WHEN origem ILIKE '%FACEBOOK%' OR origem ILIKE '%META%' THEN 'Facebook Ads'
+                WHEN origem ILIKE '%INSTAGRAM%' THEN 'Instagram'
+                WHEN origem ILIKE '%LINKEDIN%' THEN 'LinkedIn'
+                WHEN origem ILIKE '%TIKTOK%' THEN 'TikTok'
+                WHEN origem ILIKE '%WHATSAPP%' THEN 'WhatsApp'
+                WHEN origem ILIKE '%EMAIL%' THEN 'Email Marketing'
+                WHEN origem ILIKE '%SEO%' OR origem ILIKE '%ORGANICO%' THEN 'SEO/Orgânico'
+                WHEN origem ILIKE '%INDICACAO%' OR origem ILIKE '%REFERRAL%' THEN 'Indicação'
+                WHEN origem ILIKE '%DINASTIA%' THEN origem
+                WHEN origem IS NULL OR origem = '' THEN 'Sem Origem'
+                ELSE 'Outros'
+              END AS normalized_origin 
+            FROM 
+              public.leads2 
+            WHERE 
+              datacriacao >= '${startDateBR.toISOString()}'
+              AND datacriacao <= '${endDateBR.toISOString()}'
+          ) AS normalized_data 
+          GROUP BY 
+            normalized_origin 
+          ORDER BY 
+            lead_count DESC;
+        `;
 
-          const { data, error } = await query;
+        const { data: sqlResult, error: sqlError } = await client.rpc('execute_sql', { 
+          query: sqlQuery 
+        });
 
-          if (error) {
-            this.logger.error(`Erro ao buscar dados de ${tableName}:`, error);
-            throw new Error(error.message);
-          }
+        if (!sqlError && sqlResult && Array.isArray(sqlResult)) {
+          this.logger.log(`Query SQL executada com sucesso. Retornando ${sqlResult.length} categorias de origem.`);
+          return sqlResult.map(row => ({
+            origin_name: row.origin_name,
+            lead_count: parseInt(row.lead_count, 10)
+          }));
+        } else {
+          this.logger.warn('Função execute_sql não disponível ou retornou erro. Usando fallback manual.');
+        }
+      } catch (sqlError) {
+        this.logger.warn('Erro ao executar query SQL direta. Usando fallback manual:', sqlError);
+      }
 
-          if (data && data.length > 0) {
-            allData.push(...data);
-            from += pageSize;
-            hasMore = data.length === pageSize;
-          } else {
-            hasMore = false;
-          }
+      // Fallback manual: buscar dados e processar em JavaScript
+      this.logger.log('Executando fallback manual para buscar dados de origem...');
+      
+      const allData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = client
+          .from('leads2')
+          .select('origem, datacriacao')
+          .gte('datacriacao', startDateBR.toISOString())
+          .lte('datacriacao', endDateBR.toISOString())
+          .range(from, from + pageSize - 1);
+
+        const { data, error } = await query;
+
+        if (error) {
+          this.logger.error('Erro ao buscar dados de leads2:', error);
+          throw new Error(error.message);
         }
 
-        return allData;
-      };
+        if (data && data.length > 0) {
+          allData.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
 
-      // Buscar dados filtrados das duas tabelas
-      const leads2Data = await fetchFilteredRecords('leads2', 'origem', 'datacriacao') as Array<{origem: string, datacriacao: string}>;
-      const mrBaseData = await fetchFilteredRecords('MR_base_leads', 'utm_campaign', 'created_at') as Array<{utm_campaign: string, created_at: string}>;
-
-      // Função para normalizar nomes de origem
+      // Função para normalizar nomes de origem (mantendo a mesma lógica da query SQL)
       const normalizeOrigin = (origin: string | null | undefined): string => {
         if (!origin || origin.trim() === '') return 'Sem Origem';
         
         const normalized = origin.toLowerCase().trim();
         
-        // Normalização específica para evitar duplicatas
-        if (normalized.includes('isca') && (normalized.includes('hormozi') || normalized.includes('hormozi'))) {
+        if (normalized.includes('isca') && normalized.includes('scopeline')) {
+          return 'Isca Scopeline';
+        }
+        if (normalized.includes('isca') && normalized.includes('hormozi')) {
           return 'Isca Hormozi';
         }
-        if (normalized.includes('isca') && (normalized.includes('scopeline') || normalized.includes('scope'))) {
-          return 'Isca Scopeline';
+        if (normalized.includes('masterclass')) {
+          return 'Masterclass';
         }
         if (normalized.includes('manychat')) {
           return 'Manychat';
         }
         if (normalized.includes('starter10k')) {
           return 'Starter10k';
-        }
-        if (normalized.includes('masterclass')) {
-          return 'Masterclass';
         }
         if (normalized.includes('agendamento')) {
           return 'Agendamento';
@@ -880,29 +965,18 @@ export class DashboardService {
         if (normalized.includes('indicacao') || normalized.includes('referral')) {
           return 'Indicação';
         }
-        
-        // Para campanhas do Dinastia, manter o nome original mas limpo
         if (normalized.includes('dinastia')) {
           return origin.trim();
         }
         
-        // Para outros casos, capitalizar primeira letra de cada palavra
-        return origin.split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
+        return 'Outros';
       };
 
-      // Processar dados de leads2
+      // Processar dados e agrupar por origem normalizada
       const originCounts = new Map<string, number>();
       
-      leads2Data?.forEach(lead => {
+      allData.forEach(lead => {
         const normalizedOrigin = normalizeOrigin(lead.origem);
-        originCounts.set(normalizedOrigin, (originCounts.get(normalizedOrigin) || 0) + 1);
-      });
-
-      // Processar dados de MR_base_leads
-      mrBaseData?.forEach(lead => {
-        const normalizedOrigin = normalizeOrigin(lead.utm_campaign);
         originCounts.set(normalizedOrigin, (originCounts.get(normalizedOrigin) || 0) + 1);
       });
 
@@ -914,10 +988,11 @@ export class DashboardService {
         }))
         .sort((a, b) => b.lead_count - a.lead_count);
 
+      this.logger.log(`Fallback manual concluído. Retornando ${result.length} categorias de origem.`);
       return result;
 
     } catch (error) {
-      this.logger.error('Erro ao buscar dados unificados de origem:', error);
+      this.logger.error('Erro ao buscar dados de origem dos leads:', error);
       throw error;
     }
   }
