@@ -10,7 +10,6 @@ describe('FunnelService', () => {
   beforeEach(() => {
     mockSupabaseService = {
       getAverageTimeInStageFromHistory: jest.fn(),
-      aggregateKommoLeadsByStatus: jest.fn(),
       getAverageTimeInStageFromTimestamps: jest.fn(),
       getSchedulingRate: jest.fn(),
     } as any;
@@ -94,29 +93,7 @@ describe('FunnelService', () => {
     expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalledTimes(1);
   });
 
-  it('deve usar dados de kommo_leads_snapshot quando histórico está vazio', async () => {
-      const mockHistoryData: StageAverageTime[] = [];
-      const mockTimestampData = [
-        { stage_name: 'Novos Leads', avg_duration_seconds: 172800 },
-        { stage_name: 'Tentado Conexão', avg_duration_seconds: 86400 },
-        { stage_name: 'Conectado/Qualificação', avg_duration_seconds: 259200 },
-      ];
-
-      const expectedResult: TimeInStageItem[] = [
-        { stage: 'Novos Leads', averageTimeInDays: 2.0, averageTimeInSeconds: 172800 },
-        { stage: 'Tentado Conexão', averageTimeInDays: 1.0, averageTimeInSeconds: 86400 },
-        { stage: 'Conectado/Qualificação', averageTimeInDays: 3.0, averageTimeInSeconds: 259200 },
-      ];
-
-      mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
-
-      const result = await service.getTimeInStage();
-
-      expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalled();
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalled();
-      expect(result).toEqual(expectedResult);
-    });
+  // Teste relacionado ao kommo_leads_snapshot removido - não utilizamos mais essa integração
 
     it('deve calcular durações precisas usando EXTRACT(EPOCH FROM ...)', async () => {
       const mockHistoryData: StageAverageTime[] = [];
@@ -209,7 +186,7 @@ describe('FunnelService', () => {
       // Arrange: Mock history service to return empty data (fallback scenario)
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue([]);
       
-      // Mock timestamp-based data from kommo_leads_snapshot
+      // Mock timestamp-based data
       const mockTimestampData = [
         { stage_name: "Leads Novos", avg_duration_seconds: 86400 }, // 1 dia
         { stage_name: "Closers em Contato", avg_duration_seconds: 172800 }, // 2 dias
@@ -309,36 +286,7 @@ describe('FunnelService', () => {
       });
     });
 
-    it('should validate that SQL query uses correct timestamp columns from kommo_leads_snapshot', async () => {
-      // Arrange: Mock history service to return empty data
-      mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue([]);
-      
-      // Mock data that represents the expected SQL query structure
-      const mockTimestampData = [
-        { stage_name: "Leads Novos", avg_duration_seconds: 172800 }, // ts_closers_em_contato - ts_leads_novos
-        { stage_name: "Closers em Contato", avg_duration_seconds: 259200 }, // ts_agendados - ts_closers_em_contato
-        { stage_name: "Agendados", avg_duration_seconds: 345600 }, // ts_call_realizada - ts_agendados
-        { stage_name: "Call Realizada", avg_duration_seconds: 432000 }, // ts_vendas - ts_call_realizada
-        { stage_name: "Vendas", avg_duration_seconds: 518400 }, // NOW() - ts_vendas (for final stage)
-      ];
-      
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
-      
-      // Act
-      const result = await service.getTimeInStage();
-      
-      // Assert: Verify the service calls the correct SQL function
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalledTimes(1);
-      expect(result).toHaveLength(5);
-      
-      // Verify all expected stages are present
-      const stageNames = result.map(item => item.stage);
-      expect(stageNames).toContain("Leads Novos");
-      expect(stageNames).toContain("Closers em Contato");
-      expect(stageNames).toContain("Agendados");
-      expect(stageNames).toContain("Call Realizada");
-      expect(stageNames).toContain("Vendas");
-    });
+    // Teste relacionado ao kommo_leads_snapshot removido - não utilizamos mais essa integração
 
     it('should prioritize history service over timestamp fallback when history data exists', async () => {
       // Arrange: Mock history service to return data (should NOT use timestamp fallback)

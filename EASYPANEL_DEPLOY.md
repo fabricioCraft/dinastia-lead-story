@@ -37,12 +37,6 @@ SUPABASE_ANON_KEY=your_supabase_anon_key_here
 N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/leads1
 N8N_AUTHORIZATION_KEY=your_n8n_authorization_key_here
 
-# Kommo CRM Configuration
-KOMMO_SUBDOMAIN=your_kommo_subdomain
-KOMMO_INTEGRATION_ID=your_kommo_integration_id
-KOMMO_ACCESS_TOKEN=your_kommo_access_token_here
-KOMMO_PIPELINE_ID=your_pipeline_id
-
 # Server Configuration
 PORT=3001
 NODE_ENV=production

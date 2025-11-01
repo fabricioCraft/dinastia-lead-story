@@ -54,7 +54,7 @@ export class DashboardService {
   ) {}
 
   async getOriginSummary(days?: number) {
-    // Usar dados diretamente do Supabase
+    // Usar dados diretamente da tabela leads2 do Supabase
     try {
       const client = this.supabaseService.getClient();
       if (!client) {
@@ -63,16 +63,19 @@ export class DashboardService {
 
       // Calcular período se especificado
       let query = client
-        .from('px_leads')
-        .select('utm_source, utm_campaign')
-        .not('utm_source', 'is', null)
-        .neq('utm_source', '');
+        .from('leads2')
+        .select('origem')
+        .not('origem', 'is', null)
+        .neq('origem', '');
 
       if (days) {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        query = query.gte('post_date', startDate.toISOString());
+        query = query.gte('datacriacao', startDate.toISOString());
       }
+
+      // Adicionar limite alto para buscar todos os registros
+      query = query.limit(50000);
 
       const { data, error } = await query;
 
@@ -83,14 +86,10 @@ export class DashboardService {
 
       // Processar dados para agrupar por origem
       const originCounts = new Map<string, number>();
-      const campaignCounts = new Map<string, number>();
 
       data?.forEach(lead => {
-        if (lead.utm_source) {
-          originCounts.set(lead.utm_source, (originCounts.get(lead.utm_source) || 0) + 1);
-        }
-        if (lead.utm_campaign) {
-          campaignCounts.set(lead.utm_campaign, (campaignCounts.get(lead.utm_campaign) || 0) + 1);
+        if (lead.origem) {
+          originCounts.set(lead.origem, (originCounts.get(lead.origem) || 0) + 1);
         }
       });
 
@@ -99,27 +98,18 @@ export class DashboardService {
         lead_count: count
       }));
 
-      const leadsByCampaign = Array.from(campaignCounts.entries()).map(([campaign, count]) => ({
-        origin_name: campaign,
-        lead_count: count
-      }));
-
       return {
         kpis: {
           totalLeads: data?.length || 0,
           totalOrigins: originCounts.size,
-          totalCampaigns: campaignCounts.size
+          totalCampaigns: 0 // Não há campanhas na tabela leads2
         },
         leadsByOrigin,
-        leadsByCampaign
+        leadsByCampaign: [] // Não há campanhas na tabela leads2
       };
     } catch (error) {
       this.logger.error('Erro ao obter resumo de origem:', error);
-      return {
-        kpis: { totalLeads: 0, totalOrigins: 0, totalCampaigns: 0 },
-        leadsByOrigin: [],
-        leadsByCampaign: []
-      };
+      throw error;
     }
   }
 
@@ -128,96 +118,7 @@ export class DashboardService {
     return [];
   }
 
-  async getCampaignSummaryFromPxLeads(
-    startDate?: string,
-    endDate?: string
-  ): Promise<CampaignSummaryResponse> {
-    try {
-      // Definir período padrão (últimos 30 dias) se não fornecido
-      const now = new Date();
-      const start = startDate
-        ? new Date(`${startDate}T00:00:00.000Z`)
-        : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      // Fim exclusivo: somar 1 dia ao fim para incluir todo o dia final
-      const endExclusive = endDate
-        ? new Date(`${endDate}T00:00:00.000Z`)
-        : new Date(now);
-      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-
-      // Formatar datas para ISO string (inicio inclusivo, fim exclusivo)
-      const startDateISO = start.toISOString();
-      const endExclusiveISO = endExclusive.toISOString();
-      const endInclusiveISO = new Date(endExclusive.getTime() - 1).toISOString();
-
-      this.logger.log(
-        `Buscando dados de campanha para período inclusivo: ${startDateISO} até ${endInclusiveISO}`
-      );
-
-      const client = this.supabaseService.getClient();
-      if (!client) {
-        throw new Error('Cliente Supabase não inicializado');
-      }
-
-      // Query para agregar dados por utm_campaign usando API nativa do Supabase
-      const { data: campaignData, error } = await client
-        .from('px_leads')
-        .select('utm_campaign')
-        .gte('post_date', startDateISO)
-        .lt('post_date', endExclusiveISO)
-        .not('utm_campaign', 'is', null)
-        .neq('utm_campaign', '');
-
-      if (error) {
-        this.logger.error('Erro ao buscar dados de campanha:', error);
-        throw new Error(`Erro na consulta: ${error.message}`);
-      }
-
-      // Query para total de leads no período inclusivo
-      const { count: totalLeadsCount, error: totalError } = await client
-        .from('px_leads')
-        .select('*', { count: 'exact', head: true })
-        .gte('post_date', startDateISO)
-        .lt('post_date', endExclusiveISO);
-
-      if (totalError) {
-        this.logger.error('Erro ao executar query de total:', totalError);
-        throw new Error(`Erro na consulta de total: ${totalError.message}`);
-      }
-
-      const totalLeads = totalLeadsCount || 0;
-
-      // Agregar dados por utm_campaign manualmente
-      const campaignCounts = new Map<string, number>();
-      (campaignData || []).forEach((lead: any) => {
-        const campaign = lead.utm_campaign || 'Sem Campanha';
-        campaignCounts.set(campaign, (campaignCounts.get(campaign) || 0) + 1);
-      });
-
-      // Converter para array e ordenar por contagem
-      const campaigns: CampaignSummaryData[] = Array.from(campaignCounts.entries())
-        .map(([utm_campaign, lead_count]) => ({
-          utm_campaign,
-          lead_count,
-          percentage: totalLeads > 0 ? Math.round((lead_count / totalLeads) * 100) : 0,
-        }))
-        .sort((a, b) => b.lead_count - a.lead_count);
-
-      return {
-        kpis: {
-          totalLeads,
-          totalCampaigns: campaigns.length,
-        },
-        campaigns,
-        period: {
-          startDate: startDateISO,
-          endDate: endInclusiveISO,
-        },
-      };
-    } catch (error) {
-      this.logger.error('Erro ao buscar dados de campanha:', error);
-      throw error;
-    }
-  }
+  // Método getCampaignSummaryFromPxLeads removido - não há campanhas na tabela leads2
 
   async getDailyLeadVolume(
     startDate?: string,
@@ -227,9 +128,9 @@ export class DashboardService {
       this.logger.log('Buscando dados de volume diário de leads');
       this.logger.log(`Filtros recebidos - startDate: ${startDate}, endDate: ${endDate}`);
 
-      // Usar diretamente o método fallback que tem lógica mais confiável
+      // Usar diretamente o método direto que tem limit explícito
       // A função execute_sql pode não estar aplicando os filtros corretamente
-      return await this.getDailyLeadVolumeFallback(startDate, endDate);
+      return await this.getDailyLeadVolumeDirectQuery(startDate, endDate);
 
     } catch (error) {
       this.logger.error('Erro ao buscar dados de volume diário:', error);
@@ -242,19 +143,17 @@ export class DashboardService {
     endDate?: string
   ): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log('Buscando volume diário de leads exclusivamente da tabela leads2');
+      this.logger.log('Buscando volume diário de leads exclusivamente da tabela leads2 com SQL puro');
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Construir query SQL para buscar dados agregados diretamente do Supabase
+      // Query SQL pura e otimizada para buscar apenas da tabela leads2
       let sqlQuery = `
         SELECT 
-          -- Agrupa os timestamps por dia e formata para 'YYYY-MM-DD'
           DATE_TRUNC('day', datacriacao)::date AS day, 
-          -- Conta o número total de leads que caem em cada dia
           COUNT(chatid) AS total_leads_per_day 
         FROM 
           public.leads2 
@@ -268,10 +167,8 @@ export class DashboardService {
         sqlQuery += ` AND datacriacao >= $${queryParams.length}`;
       }
       if (endDate) {
-        const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
-        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-        queryParams.push(endExclusive.toISOString());
-        sqlQuery += ` AND datacriacao < $${queryParams.length}`;
+        queryParams.push(`${endDate}T23:59:59.999Z`);
+        sqlQuery += ` AND datacriacao <= $${queryParams.length}`;
       }
 
       sqlQuery += `
@@ -280,95 +177,97 @@ export class DashboardService {
         ORDER BY 
           day ASC`;
 
-      this.logger.log(`Executando query SQL: ${sqlQuery}`);
+      this.logger.log(`Executando query SQL pura: ${sqlQuery}`);
       this.logger.log(`Parâmetros: ${JSON.stringify(queryParams)}`);
 
-      // Executar a query usando rpc para ter mais controle
-      const { data, error } = await client.rpc('execute_sql', {
-        sql_query: sqlQuery,
-        params: queryParams
-      });
+      // Tentar usar execute_sql primeiro
+      try {
+        const { data, error } = await client.rpc('execute_sql', {
+          sql_query: sqlQuery,
+          params: queryParams
+        });
 
-      if (error) {
-        this.logger.error('Erro ao executar query SQL:', error);
-        // Fallback para busca manual se a função execute_sql não estiver disponível
-        return await this.getDailyLeadVolumeManualFallback(startDate, endDate);
+        if (!error && data) {
+          this.logger.log(`Query SQL retornou ${data.length} registros de volume diário`);
+          return data;
+        }
+      } catch (rpcError) {
+        this.logger.warn('Função execute_sql não disponível, usando fallback manual');
       }
 
-      this.logger.log(`Query retornou ${data?.length || 0} registros de volume diário`);
-      return data || [];
+      // Fallback manual usando apenas leads2
+      return await this.getDailyLeadVolumeDirectQuery(startDate, endDate);
 
     } catch (error) {
       this.logger.error('Erro ao buscar volume diário de leads:', error);
-      // Fallback para busca manual em caso de erro
-      return await this.getDailyLeadVolumeManualFallback(startDate, endDate);
+      throw error;
     }
   }
 
   /**
-   * Fallback manual para buscar volume diário quando a função SQL não está disponível
-   * Usa apenas a tabela leads2
+   * Query direta para buscar volume diário usando apenas leads2
+   * Método simplificado sem ajustes de fuso horário
    */
-  private async getDailyLeadVolumeManualFallback(
+  private async getDailyLeadVolumeDirectQuery(
     startDate?: string,
     endDate?: string
   ): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log('Usando fallback manual para volume diário de leads (apenas leads2)');
+      this.logger.log('Usando query direta para volume diário de leads (apenas leads2) com paginação');
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Buscar dados de leads2 usando paginação
-      const leads2Data: any[] = [];
-      let page = 0;
-      const pageSize = 1000; // Máximo permitido pelo Supabase
-      let hasMoreLeads2 = true;
+      // Buscar TODOS os dados de leads2 com paginação
+      const allLeads2Data: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      while (hasMoreLeads2) {
+      this.logger.log('Iniciando paginação para tabela leads2...');
+      while (hasMore) {
         let query = client
           .from('leads2')
-          .select('datacriacao, chatid')
-          .not('datacriacao', 'is', null)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+          .select('datacriacao')
+          .not('datacriacao', 'is', null);
 
         if (startDate) {
           query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
         }
         if (endDate) {
-          const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
-          endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-          query = query.lt('datacriacao', endExclusive.toISOString());
+          query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
         }
 
-        const { data: pageData, error: pageError } = await query;
-        
-        if (pageError) {
-          this.logger.error(`Erro ao buscar página ${page} de leads2:`, pageError);
-          throw new Error(`Erro na consulta leads2 página ${page}: ${pageError.message}`);
+        query = query.range(from, from + pageSize - 1);
+
+        const { data, error } = await query;
+
+        if (error) {
+          this.logger.error('Erro ao buscar dados de leads2:', error);
+          throw new Error(`Erro na consulta leads2: ${error.message}`);
         }
 
-        if (pageData && pageData.length > 0) {
-          leads2Data.push(...pageData);
-          this.logger.log(`Página ${page} de leads2: ${pageData.length} registros`);
+        if (data && data.length > 0) {
+          allLeads2Data.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+          this.logger.log(`Coletados ${allLeads2Data.length} registros de leads2 até agora...`);
+        } else {
+          hasMore = false;
         }
-
-        hasMoreLeads2 = pageData && pageData.length === pageSize;
-        page++;
       }
 
-      this.logger.log(`Total de registros coletados da leads2: ${leads2Data.length}`);
+      this.logger.log(`Total de registros coletados da leads2: ${allLeads2Data.length}`);
 
-      // Agregar os dados manualmente por dia
+      // Agregar os dados manualmente por dia (sem ajuste de fuso horário)
       const dailyCounts = new Map<string, number>();
 
-      // Processar apenas leads2
-      (leads2Data || []).forEach((lead: any) => {
+      // Processar dados de leads2
+      allLeads2Data.forEach((lead: any) => {
         const date = new Date(lead.datacriacao);
-        // Usar fuso horário brasileiro (UTC-3) para evitar problemas de data
-        const day = new Date(date.getTime() - (3 * 60 * 60 * 1000)).toISOString().split('T')[0]; // YYYY-MM-DD
+        const day = date.toISOString().split('T')[0]; // YYYY-MM-DD
         dailyCounts.set(day, (dailyCounts.get(day) || 0) + 1);
       });
 
@@ -380,11 +279,12 @@ export class DashboardService {
         }))
         .sort((a, b) => a.day.localeCompare(b.day));
 
-      this.logger.log(`Fallback manual retornando ${result.length} registros de volume diário`);
+      const totalLeads = result.reduce((sum, item) => sum + item.total_leads_per_day, 0);
+      this.logger.log(`Query direta com paginação retornando ${result.length} registros de volume diário com total de ${totalLeads} leads (apenas leads2)`);
       return result;
 
     } catch (error) {
-      this.logger.error('Erro no fallback manual de volume diário:', error);
+      this.logger.error('Erro na query direta de volume diário:', error);
       throw error;
     }
   }
@@ -707,7 +607,7 @@ export class DashboardService {
 
     } catch (error) {
       this.logger.error('Erro no fallback unificado de agendamentos diários:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -1011,7 +911,8 @@ export class DashboardService {
         .from('leads2')
         .select('etapa')
         .not('etapa', 'is', null)
-        .neq('etapa', '');
+        .neq('etapa', '')
+        .limit(50000);
 
       if (error) {
         this.logger.error('Erro ao buscar leads por etapa:', error);

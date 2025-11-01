@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_webhook ON public.dashboard_d
 
 -- Comentários para documentação
 COMMENT ON TABLE public.dashboard_data_snapshots IS 'Armazena snapshots de dados do dashboard para cache e histórico';
-COMMENT ON COLUMN public.dashboard_data_snapshots.snapshot_type IS 'Tipo do snapshot (ex: n8n_data, kommo_data)';
+COMMENT ON COLUMN public.dashboard_data_snapshots.snapshot_type IS 'Tipo do snapshot (ex: n8n_data)';
 COMMENT ON COLUMN public.dashboard_data_snapshots.data IS 'Dados do snapshot em formato JSON';
 COMMENT ON COLUMN public.dashboard_data_snapshots.execution_time IS 'Timestamp de quando o snapshot foi executado';
 COMMENT ON COLUMN public.dashboard_data_snapshots.is_from_webhook IS 'Indica se o snapshot veio de um webhook';

@@ -12,7 +12,7 @@ AS $$
     -- Dividir pelo total de leads únicos na tabela (para evitar divisão por zero, usamos NULLIF)
     CAST(NULLIF(COUNT(DISTINCT lead_id), 0) AS float) 
     AS scheduling_rate 
-  FROM kommo_leads_snapshot;
+  FROM leads2;
 $$;
 
 -- Comentário para documentação

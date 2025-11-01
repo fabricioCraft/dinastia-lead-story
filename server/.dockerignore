@@ -1,0 +1,26 @@
+# Arquivo: .dockerignore
+
+# Dependências (serão instaladas dentro do container)
+node_modules
+server/node_modules
+
+# Arquivos de build (serão criados dentro do container)
+dist
+server/dist
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos de ambiente local (o .env do server DEVE ser incluído)
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Pastas do Git
+.git
+
+# Outros
+.DS_Store

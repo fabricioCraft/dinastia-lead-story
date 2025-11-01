@@ -30,13 +30,13 @@ export class TestSqlController {
   @Get('check-snapshot-table')
   async checkSnapshotTable() {
     try {
-      // Verificar tabela px_leads ao invés de kommo_leads_snapshot
+      // Verificar tabela leads2 do Supabase
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
       const { data, error } = await client
-        .from('px_leads')
+        .from('leads2')
         .select('*')
         .limit(3);
 
@@ -48,13 +48,13 @@ export class TestSqlController {
         success: true,
         count: data?.length || 0,
         sample: data || [],
-        message: 'px_leads table accessed successfully'
+        message: 'leads2 table accessed successfully'
       };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
-        message: 'Failed to access px_leads table'
+        message: 'Failed to access leads2 table'
       };
     }
   }
@@ -86,22 +86,22 @@ export class TestSqlController {
       }
 
       const result = await client
-        .from('px_leads')
-        .select('lead_id, current_status_name, ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada')
-        .or('ts_novos_leads.not.is.null,ts_tentado_conexao.not.is.null,ts_conectado_qualificacao.not.is.null,ts_noshow.not.is.null,ts_reuniao.not.is.null,ts_oportunidade.not.is.null,ts_negociacao.not.is.null,ts_venda_realizada.not.is.null')
+        .from('leads2')
+        .select('id, email, datacriacao')
+        .not('datacriacao', 'is', null)
         .limit(10);
 
       return {
         success: true,
         data: result.data,
         count: result.data?.length || 0,
-        message: 'Valid timestamps found'
+        message: 'Valid timestamps found in leads2'
       };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido',
-        message: 'Failed to find valid timestamps'
+        message: 'Failed to find valid timestamps in leads2'
       };
     }
   }
@@ -109,21 +109,21 @@ export class TestSqlController {
   @Get('test-direct-sql')
   async testDirectSql() {
     try {
-      // Testar uma query simples na tabela px_leads
+      // Testar uma query simples na tabela leads2
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
       const result = await client
-        .from('px_leads')
+        .from('leads2')
         .select('count(*)')
-        .not('created_at', 'is', null);
+        .not('datacriacao', 'is', null);
 
       return {
         success: true,
         data: result.data,
-        message: 'Direct SQL test successful'
+        message: 'Direct SQL test successful with leads2'
       };
     } catch (error) {
       return {
@@ -190,7 +190,7 @@ export class TestSqlController {
         }
         
         const { data: leadsData, error: leadsError } = await client
-          .from('px_leads')
+          .from('leads2')
           .select('*')
           .limit(2);
         
@@ -201,7 +201,7 @@ export class TestSqlController {
         
         return {
           success: true,
-          px_leads: {
+          leads2: {
             count: leadsData?.length || 0,
             sample: leadsData || [],
             error: leadsError?.message
@@ -220,85 +220,7 @@ export class TestSqlController {
        }
    }
 
-   // @Get('debug-pipelines')
-   // async debugPipelines() {
-   //   try {
-   //     // Usar método público do KommoService para acessar informações de pipelines
-   //     const pipelinesInfo = await this.kommoService.getPipelinesInfo();
-   //     
-   //     return pipelinesInfo;
-   //   } catch (error) {
-   //     return {
-   //       success: false,
-   //       error: error instanceof Error ? error.message : 'Erro desconhecido'
-   //     };
-   //   }
-   //  }
-
-    // @Get('debug-status-endpoints')
-    // async debugStatusEndpoints() {
-    //   try {
-    //     const results: any[] = [];
-    //     
-    //     // Tentar diferentes endpoints para buscar status
-    //     try {
-    //       const pipelinesWithStatus = await (this.kommoService as any).apiClient.get('/leads/pipelines', {
-    //         params: { with: 'statuses' }
-    //       });
-    //       results.push({
-    //         endpoint: '/leads/pipelines?with=statuses',
-    //         success: true,
-    //         data: pipelinesWithStatus.data._embedded?.pipelines?.map(p => ({
-    //           id: p.id,
-    //           name: p.name,
-    //           statusCount: p.statuses?.length || 0
-    //         })) || []
-    //       });
-    //     } catch (error) {
-    //       results.push({
-    //         endpoint: '/leads/pipelines?with=statuses',
-    //         success: false,
-    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
-    //       });
-    //     }
-
-    //     // Tentar endpoint específico de status
-    //     try {
-    //       const statusResponse = await (this.kommoService as any).apiClient.get('/leads/statuses');
-    //       results.push({
-    //         endpoint: '/leads/statuses',
-    //         success: true,
-    //         data: statusResponse.data
-    //       });
-    //     } catch (error) {
-    //       results.push({
-    //         endpoint: '/leads/statuses',
-    //         success: false,
-    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
-    //       });
-    //     }
-
-    //     // Tentar buscar um pipeline específico
-    //     try {
-    //       const pipelineId = (this.kommoService as any).pipelineId;
-    //       const specificPipeline = await (this.kommoService as any).apiClient.get(`/leads/pipelines/${pipelineId}`);
-    //       results.push({
-    //         endpoint: `/leads/pipelines/${pipelineId}`,
-    //         success: true,
-    //         data: {
-    //           id: specificPipeline.data.id,
-    //           name: specificPipeline.data.name,
-    //           statusCount: specificPipeline.data.statuses?.length || 0,
-    //           statuses: specificPipeline.data.statuses?.map(s => ({ id: s.id, name: s.name })) || []
-    //         }
-    //       });
-    //     } catch (error) {
-    //       results.push({
-    //         endpoint: `/leads/pipelines/${(this.kommoService as any).pipelineId}`,
-    //         success: false,
-    //         error: error instanceof Error ? error.message : 'Erro desconhecido'
-    //       });
-    //     }
+   // Métodos relacionados ao Kommo removidos - não utilizamos mais essa integração
 
     //     return {
     //       success: true,
@@ -387,267 +309,24 @@ export class TestSqlController {
         }
       }
 
-      // @Get('debug-upsert-process')
-      // async debugUpsertProcess() {
-      //   try {
-      //     // Buscar alguns leads do Kommo
-      //     const leadsFromKommo = await this.kommoService.getLeadsFromPipeline();
-      //     const sampleLeads = leadsFromKommo.slice(0, 3); // Apenas 3 leads para teste
-      //     
-      //     // Tentar inserir leads na tabela px_leads
-      //     this.logger.log('🧪 Testando inserção de 3 leads na tabela px_leads...');
-      //     const insertResult = await this.supabaseService.insertTestRecord('px_leads', sampleLeads);
-      //     
-      //     // Verificar se foram inseridos
-      //     const afterInsert = await this.supabaseService.selectFromTable('px_leads', 10);
-      //     
-      //     return {
-      //       success: true,
-      //       sampleLeads,
-      //       insertResult,
-      //       afterInsertCount: afterInsert.data?.length || 0,
-      //       afterInsertSample: afterInsert.data?.slice(0, 3) || []
-      //     };
-      //   } catch (error) {
-      //     return {
-      //       success: false,
-      //       error: error instanceof Error ? error.message : 'Erro desconhecido',
-      //       stack: error.stack
-      //     };
-      //   }
-      // }
+      // Método debugUpsertProcess removido - não utilizamos mais Kommo nem px_leads
 
-      @Get('debug-table-structure')
-      async debugTableStructure() {
-        try {
-          // Tentar uma consulta simples para verificar se a tabela existe
-          const { data: testData, error: testError } = await (this.supabaseService as any).client
-            .from('kommo_leads_snapshot')
-            .select('*')
-            .limit(1);
+      // Métodos debugTableStructure e fixTableStructure removidos - não utilizamos mais kommo_leads_snapshot
 
-          // Tentar inserir um registro de teste para ver qual erro específico ocorre
-          const testRecord = {
-            lead_id: 999999,
-            status_name: 'Test Status',
-            pipeline_id: 123456,
-            updated_at: new Date().toISOString()
-          };
-
-          const { data: insertData, error: insertError } = await (this.supabaseService as any).client
-            .from('kommo_leads_snapshot')
-            .insert([testRecord])
-            .select();
-
-          // Se inseriu com sucesso, deletar o registro de teste
-          if (!insertError) {
-            await (this.supabaseService as any).client
-              .from('kommo_leads_snapshot')
-              .delete()
-              .eq('lead_id', 999999);
-          }
-
-          return {
-            success: true,
-            tableExists: !testError,
-            selectError: testError?.message || null,
-            insertError: insertError?.message || null,
-            insertSuccess: !insertError,
-            message: insertError ? 'Problema na estrutura da tabela' : 'Tabela funcionando corretamente'
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
-          };
-        }
-      }
-
-      @Post('fix-table-structure')
-      async fixTableStructure() {
-        try {
-          // Adicionar coluna pipeline_id que está faltando
-          const { data: alterData, error: alterError } = await (this.supabaseService as any).client
-            .rpc('exec_sql', {
-              sql: 'ALTER TABLE public.kommo_leads_snapshot ADD COLUMN IF NOT EXISTS pipeline_id integer;'
-            });
-
-          if (alterError) {
-            return {
-              success: false,
-              error: `Erro ao adicionar coluna pipeline_id: ${alterError.message}`
-            };
-          }
-
-          // Testar inserção após adicionar a coluna
-          const testRecord = {
-            lead_id: 999998,
-            status_name: 'Test Status After Fix',
-            pipeline_id: 123456,
-            updated_at: new Date().toISOString()
-          };
-
-          const { data: insertData, error: insertError } = await (this.supabaseService as any).client
-            .from('kommo_leads_snapshot')
-            .insert([testRecord])
-            .select();
-
-          // Se inseriu com sucesso, deletar o registro de teste
-          if (!insertError) {
-            await (this.supabaseService as any).client
-              .from('kommo_leads_snapshot')
-              .delete()
-              .eq('lead_id', 999998);
-          }
-
-          return {
-            success: true,
-            alterSuccess: !alterError,
-            insertAfterFix: !insertError,
-            insertError: insertError?.message || null,
-            message: insertError ? 'Coluna adicionada mas ainda há problemas' : 'Tabela corrigida com sucesso'
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
-          };
-        }
-      }
-
-  /**
-   * Endpoint para consultar dados da tabela kommo_leads_snapshot
-   */
-  @Get('debug-snapshot-data')
-  async debugSnapshotData() {
-    try {
-      const { data, error } = await this.supabaseService
-        .selectFromTable('kommo_leads_snapshot', 10);
-
-      if (error) {
-        return {
-          success: false,
-          error: error.message
-        };
-      }
-
-      return {
-        success: true,
-        count: data?.length || 0,
-        data: data || []
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      };
-    }
-  }
-
-  /**
-   * Endpoint para descobrir a estrutura real da tabela kommo_leads_snapshot
-   */
-  @Get('discover-table-structure')
-  async discoverTableStructure() {
-    try {
-      // Vamos tentar inserir registros com diferentes estruturas para descobrir quais colunas existem
-      const testStructures = [
-        // Estrutura 1: apenas lead_id
-        { lead_id: 999991 },
-        
-        // Estrutura 2: com current_status_name
-        { lead_id: 999992, current_status_name: 'Test' },
-        
-        // Estrutura 3: com timestamp columns
-        { 
-          lead_id: 999993, 
-          current_status_name: 'Test',
-          ts_leads_novos: new Date().toISOString()
-        },
-        
-        // Estrutura 4: com todas as colunas esperadas
-        { 
-          lead_id: 999994, 
-          current_status_name: 'Test',
-          ts_leads_novos: new Date().toISOString(),
-          ts_closers_em_contato: null,
-          ts_agendados: null,
-          ts_call_realizada: null,
-          ts_vendas: null,
-          updated_at: new Date().toISOString()
-        }
-      ];
-
-      const results: Array<{
-        structure: number;
-        success: boolean;
-        error?: string;
-        data?: any;
-        columns: string[];
-      }> = [];
-      
-      for (let i = 0; i < testStructures.length; i++) {
-        const testRecord = testStructures[i];
-        
-        try {
-          const { data: insertData, error: insertError } = await this.supabaseService
-            .insertTestRecord('kommo_leads_snapshot', testRecord);
-
-          if (insertError) {
-            results.push({
-              structure: i + 1,
-              success: false,
-              error: insertError.message,
-              columns: Object.keys(testRecord)
-            });
-          } else {
-            results.push({
-              structure: i + 1,
-              success: true,
-              data: insertData,
-              columns: Object.keys(testRecord)
-            });
-            
-            // Deletar o registro de teste
-            await this.supabaseService
-              .deleteTestRecord('kommo_leads_snapshot', 'lead_id', testRecord.lead_id);
-          }
-        } catch (error) {
-          results.push({
-            structure: i + 1,
-            success: false,
-            error: error.message,
-            columns: Object.keys(testRecord)
-          });
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Teste de estruturas concluído',
-        results
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      };
-    }
-  }
+      // Métodos relacionados ao kommo_leads_snapshot removidos - não utilizamos mais essa tabela
 
   @Get('check-data')
   async checkData() {
     try {
-      // Buscar todos os leads da tabela px_leads
-      const allLeads = await this.supabaseService.selectFromTable('px_leads', 100);
+      // Buscar todos os leads da tabela leads2
+      const allLeads = await this.supabaseService.selectFromTable('leads2', 100);
       
       // Filtrar registros que têm dados válidos
       const recordsWithData = allLeads.data?.filter(record => 
-        record.created_at || 
-        record.utm_source || 
-        record.utm_campaign ||
+        record.datacriacao || 
+        record.origem || 
         record.email ||
-        record.phone
+        record.telefone
       ) || [];
 
       return {
@@ -718,7 +397,7 @@ export class TestSqlController {
           }
           
           const columnExists = await this.supabaseService.testColumnExists(
-            'kommo_leads_snapshot', 
+            'leads2', 
             column, 
             testData[column]
           );
@@ -752,161 +431,9 @@ export class TestSqlController {
     }
   }
 
-  @Post('test-simple-insert')
-  async testSimpleInsert() {
-    try {
-      const testId = Math.floor(Math.random() * 1000000);
-      
-      // Teste 1: Inserção básica
-      const basicRecord = {
-        lead_id: testId,
-        current_status_name: 'Leads Novos',
-        created_at: new Date().toISOString()
-      };
+  // Métodos testSimpleInsert e checkTableSchema removidos - não utilizamos mais kommo_leads_snapshot
 
-      console.log('🔍 Tentando inserir registro básico:', basicRecord);
-
-      const { data: basicData, error: basicError } = await this.supabaseService
-        .insertTestRecord('kommo_leads_snapshot', basicRecord);
-
-      if (basicError) {
-        console.error('❌ Erro na inserção básica:', basicError);
-        return {
-          success: false,
-          error: `Inserção básica falhou: ${basicError.message}`,
-          testRecord: basicRecord
-        };
-      }
-
-      console.log('✅ Inserção básica bem-sucedida:', basicData);
-
-      // Teste 2: Inserção com timestamp
-      const timestampRecord = {
-        lead_id: testId + 1,
-        current_status_name: 'Leads Novos',
-        created_at: new Date().toISOString(),
-        ts_novos_leads: new Date().toISOString()
-      };
-
-      console.log('🔍 Tentando inserir registro com timestamp:', timestampRecord);
-
-      const { data: timestampData, error: timestampError } = await this.supabaseService
-        .insertTestRecord('kommo_leads_snapshot', timestampRecord);
-
-      if (timestampError) {
-        console.error('❌ Erro na inserção com timestamp:', timestampError);
-        return {
-          success: false,
-          error: `Inserção com timestamp falhou: ${timestampError.message}`,
-          testRecord: timestampRecord
-        };
-      }
-
-      console.log('✅ Inserção com timestamp bem-sucedida:', timestampData);
-
-      // Limpar dados de teste
-      await this.supabaseService
-        .deleteTestRecords('kommo_leads_snapshot', 'lead_id', [testId, testId + 1]);
-
-      return {
-        success: true,
-        message: 'Ambas as inserções foram bem-sucedidas',
-        basicResult: basicData,
-        timestampResult: timestampData
-      };
-
-    } catch (error) {
-      console.error('Erro no teste de inserção:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  @Get('check-table-schema')
-  async checkTableSchema() {
-    try {
-      // Verificar schema da tabela usando query SQL
-      const { data, error } = await this.supabaseService.executeRawQuery(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'kommo_leads_snapshot'`);
-
-      if (error) {
-        console.error('❌ Erro ao verificar schema:', error);
-        
-        // Tentar abordagem alternativa - fazer select sem dados
-        const { data: emptyData, error: emptyError } = await this.supabaseService.getTableSchema('kommo_leads_snapshot');
-
-        if (emptyError) {
-          return {
-            success: false,
-            error: `Erro ao verificar schema: ${emptyError.message}`
-          };
-        }
-
-        return {
-          success: true,
-          message: 'Schema verificado via select vazio',
-          columns: 'Não foi possível obter lista de colunas'
-        };
-      }
-
-      return {
-        success: true,
-        columns: data
-      };
-
-    } catch (error) {
-      console.error('Erro ao verificar schema:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  @Post('test-minimal-insert')
-  async testMinimalInsert() {
-    try {
-      const testId = Math.floor(Math.random() * 1000000);
-      
-      // Teste com apenas as colunas essenciais
-      const minimalRecord = {
-        lead_id: testId,
-        current_status_name: 'Leads Novos'
-      };
-
-      console.log('🔍 Tentando inserir registro mínimo:', minimalRecord);
-
-      const { data, error } = await this.supabaseService.insertTestRecord('kommo_leads_snapshot', minimalRecord);
-
-      if (error) {
-        console.error('❌ Erro na inserção mínima:', error);
-        return {
-          success: false,
-          error: `Inserção mínima falhou: ${error.message}`,
-          testRecord: minimalRecord
-        };
-      }
-
-      console.log('✅ Inserção mínima bem-sucedida:', data);
-
-      // Limpar dados de teste
-      await this.supabaseService.deleteTestRecord('kommo_leads_snapshot', 'lead_id', testId);
-
-      return {
-        success: true,
-        message: 'Inserção mínima bem-sucedida',
-        result: data
-      };
-
-    } catch (error) {
-      console.error('Erro no teste de inserção mínima:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
+  // Método testMinimalInsert removido - não utilizamos mais kommo_leads_snapshot
 
   @Post('execute-sql')
   async executeSql(@Body() body: { sql: string }) {

@@ -92,10 +92,10 @@ END;
 $$ language 'plpgsql';
 
 -- Comentários para documentação
-COMMENT ON TABLE public.lead_stage_history IS 'Histórico completo de mudanças de etapa dos leads do Kommo CRM';
-COMMENT ON COLUMN public.lead_stage_history.lead_id IS 'ID do lead no Kommo CRM';
-COMMENT ON COLUMN public.lead_stage_history.stage_name IS 'Nome da etapa/status no Kommo';
+COMMENT ON TABLE public.lead_stage_history IS 'Histórico completo de mudanças de etapa dos leads do funil de vendas';
+COMMENT ON COLUMN public.lead_stage_history.lead_id IS 'ID do lead no sistema';
+COMMENT ON COLUMN public.lead_stage_history.stage_name IS 'Nome da etapa/status no funil';
 COMMENT ON COLUMN public.lead_stage_history.entered_at IS 'Data e hora que o lead entrou nesta etapa';
 COMMENT ON COLUMN public.lead_stage_history.exited_at IS 'Data e hora que o lead saiu desta etapa (NULL se ainda estiver na etapa)';
 COMMENT ON COLUMN public.lead_stage_history.duration_seconds IS 'Duração em segundos que o lead ficou nesta etapa (calculado automaticamente)';
-COMMENT ON COLUMN public.lead_stage_history.pipeline_id IS 'ID do pipeline no Kommo';
+COMMENT ON COLUMN public.lead_stage_history.pipeline_id IS 'ID do pipeline no sistema';

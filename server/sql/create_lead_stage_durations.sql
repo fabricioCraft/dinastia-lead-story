@@ -1,4 +1,4 @@
--- Tabela para armazenar durações de leads por estágio do Kommo CRM
+-- Tabela para armazenar durações de leads por estágio do funil de vendas
 -- Esta tabela rastreia quanto tempo cada lead passa em cada estágio do funil
 
 CREATE TABLE IF NOT EXISTS lead_stage_durations (
@@ -36,9 +36,9 @@ CREATE TRIGGER update_lead_stage_durations_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Comentários para documentação
-COMMENT ON TABLE lead_stage_durations IS 'Armazena o histórico de tempo que cada lead passa em cada estágio do funil de vendas do Kommo CRM';
-COMMENT ON COLUMN lead_stage_durations.lead_id IS 'ID do lead no Kommo CRM';
-COMMENT ON COLUMN lead_stage_durations.stage_name IS 'Nome do estágio/status no Kommo';
+COMMENT ON TABLE lead_stage_durations IS 'Armazena o histórico de tempo que cada lead passa em cada estágio do funil de vendas';
+COMMENT ON COLUMN lead_stage_durations.lead_id IS 'ID do lead';
+COMMENT ON COLUMN lead_stage_durations.stage_name IS 'Nome do estágio/status';
 COMMENT ON COLUMN lead_stage_durations.entered_at IS 'Data e hora que o lead entrou neste estágio';
 COMMENT ON COLUMN lead_stage_durations.exited_at IS 'Data e hora que o lead saiu deste estágio (NULL se ainda estiver no estágio)';
 COMMENT ON COLUMN lead_stage_durations.duration_seconds IS 'Duração em segundos que o lead ficou neste estágio (NULL se ainda estiver no estágio)';

@@ -17,10 +17,6 @@ Para executar o servidor, você precisa configurar as variáveis de ambiente:
    - **SUPABASE_ANON_KEY**: Chave anônima do Supabase
    - **N8N_WEBHOOK_URL**: URL do webhook do n8n
    - **N8N_AUTHORIZATION_KEY**: Chave de autorização do n8n
-   - **KOMMO_SUBDOMAIN**: Subdomínio do Kommo CRM
-   - **KOMMO_INTEGRATION_ID**: ID da integração do Kommo
-   - **KOMMO_ACCESS_TOKEN**: Token de acesso do Kommo
-   - **KOMMO_PIPELINE_ID**: ID do pipeline do Kommo
    - **PORT**: Porta do servidor (padrão: 3001)
 
 ### ⚠️ Segurança

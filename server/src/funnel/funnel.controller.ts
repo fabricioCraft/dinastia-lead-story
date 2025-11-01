@@ -55,13 +55,13 @@ export class FunnelController {
   @Get('check-table')
   async checkTable() {
     try {
-      // Verificar tabelas principais do Supabase
+      // Verificar tabela leads2 do Supabase
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
       const { data, error } = await client
-        .from('px_leads')
+        .from('leads2')
         .select('*', { count: 'exact', head: true });
       
       return {
@@ -73,7 +73,7 @@ export class FunnelController {
         }
       };
     } catch (error) {
-      console.error('Error checking px_leads table:', error);
+      console.error('Error checking leads2 table:', error);
       return {
         success: false,
         error: error.message

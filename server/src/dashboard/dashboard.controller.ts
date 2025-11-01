@@ -57,6 +57,14 @@ export class DashboardController {
     return this.dashboardService.getUnifiedOriginSummary(daysNumber, fromDate, toDate);
   }
 
+  @Get('leads-by-stage')
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey('leads_by_stage_data')
+  @CacheTTL(3600) // 1 hora - cache para dados de leads por etapa
+  async getLeadsByStage() {
+    return this.dashboardService.getDashboardLeadsByStage();
+  }
+
 
 
 

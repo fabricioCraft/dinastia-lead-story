@@ -12,9 +12,20 @@ export interface DailyLeadVolumeFilters {
 
 /**
  * Hook para buscar dados de volume diário de leads
- * Combina dados das tabelas leads2 e MR_base_leads
- * @param filters Filtros de data (startDate e endDate)
- * @returns Query com dados de volume diário de leads
+ * 
+ * Este hook faz uma requisição para a API /api/dashboard/daily-lead-volume
+ * e retorna os dados formatados para uso em componentes de gráfico.
+ * 
+ * Funcionalidades:
+ * - Busca dados de volume diário de leads
+ * - Suporte a filtros de período (startDate, endDate)
+ * - Cache automático e revalidação
+ * - Estados de loading e error
+ * - Dados da tabela leads2 do Supabase
+ * 
+ * @param startDate - Data de início do período (opcional)
+ * @param endDate - Data de fim do período (opcional)
+ * @returns Objeto com dados, loading, error e função mutate
  */
 export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
   return useQuery<DailyLeadVolumeData[]>({

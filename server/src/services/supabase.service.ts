@@ -193,7 +193,7 @@ export class SupabaseService {
     try {
       // Buscar todos os dados necessários
       const { data, error } = await this.client
-        .from('kommo_leads_snapshot')
+        .from('leads2')
         .select('ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada');
       
       if (error) {

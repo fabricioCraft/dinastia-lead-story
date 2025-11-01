@@ -42,16 +42,38 @@ const DailyLeadVolumeChartSkeleton = () => {
 };
 
 /**
- * Gráfico de linha mostrando o volume diário de leads
- * Combina dados das tabelas leads2 e MR_base_leads
+ * Gráfico de Volume Diário de Leads
+ * 
+ * Este componente exibe a evolução diária do volume de leads ao longo do tempo.
+ * Os dados são obtidos através do hook useDailyLeadVolume que faz uma requisição
+ * para a API /api/dashboard/daily-lead-volume.
+ * 
+ * Funcionalidades:
+ * - Exibe um gráfico de linha mostrando o volume diário de leads
+ * - Calcula e exibe estatísticas como total, média e pico diário
+ * - Suporte a filtros de período através do contexto PeriodContext
+ * - Responsivo e otimizado para diferentes tamanhos de tela
+ * 
+ * Dados:
+ * - Fonte: API endpoint /api/dashboard/daily-lead-volume
+ * - Dados da tabela leads2 do Supabase
+ * - Agrupamento por dia (YYYY-MM-DD)
+ * - Ordenação cronológica
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <DailyLeadVolumeChart />
+ * ```
  */
 export function DailyLeadVolumeChart() {
   const { filters } = useFilters();
   
   // Construir objeto de filtros para o hook
+  // Usar formatação local para evitar problemas de fuso horário
   const filterParams = {
-    startDate: filters.dateRange?.from?.toISOString().split('T')[0],
-    endDate: filters.dateRange?.to?.toISOString().split('T')[0],
+    startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+    endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
   };
   
   const { data, isLoading, error } = useDailyLeadVolume(filterParams);
@@ -112,9 +134,9 @@ export function DailyLeadVolumeChart() {
         <h3 className="text-lg font-semibold text-foreground">Volume Diário de Leads</h3>
       </div>
       
-      <p className="text-sm text-muted-foreground mb-6">
-        Evolução diária da aquisição de leads (leads2 + MR_base_leads)
-      </p>
+      <p className="text-sm text-muted-foreground">
+                Evolução diária da aquisição de leads
+              </p>
 
       {/* Estatísticas */}
       <div className="grid grid-cols-3 gap-4 mb-6">

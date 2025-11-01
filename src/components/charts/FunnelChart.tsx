@@ -1,14 +1,44 @@
+import React from "react";
 import { Card } from "@/components/ui/card";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useStagesSummary } from "@/hooks/useStagesSummary";
+import { ChartLoadingState, ChartErrorState, ChartEmptyState } from "@/components/ui/chart-states";
 
-const funnelData = [
-  { stage: "Novos Leads", value: 1250, percentage: 100, color: "hsl(var(--chart-1))" },
-  { stage: "Qualificados (MQL)", value: 850, percentage: 68, color: "hsl(var(--chart-2))" },
-  { stage: "Agendamentos", value: 525, percentage: 42, color: "hsl(var(--chart-3))" },
-  { stage: "Oportunidades (SQL)", value: 310, percentage: 24.8, color: "hsl(var(--chart-4))" },
-  { stage: "Clientes Ganhos", value: 115, percentage: 9.2, color: "hsl(var(--accent))" },
+const STAGE_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--accent))",
 ];
 
 export function FunnelChart() {
+  const { data: stagesData, isLoading, error } = useStagesSummary();
+
+  // Processar dados para o funil
+  const funnelData = stagesData?.map((item, index) => {
+    const maxValue = stagesData[0]?.count || 1;
+    const percentage = (item.count / maxValue) * 100;
+    
+    return {
+      stage: item.stage,
+      value: item.count,
+      percentage: Math.round(percentage * 10) / 10,
+      color: STAGE_COLORS[index % STAGE_COLORS.length],
+    };
+  }) || [];
+
+  if (isLoading) {
+    return <ChartLoadingState title="Funil de Vendas" />;
+  }
+
+  if (error) {
+    return <ChartErrorState title="Funil de Vendas" error={error} />;
+  }
+
+  if (!funnelData.length) {
+    return <ChartEmptyState title="Funil de Vendas" message="Nenhum dado do funil disponível" />;
+  }
   return (
     <Card className="p-6 card-glow border-border/50 hover:shadow-lg transition-shadow duration-300">
       <h3 className="text-lg font-semibold text-foreground mb-6">Funil de Vendas Interativo</h3>
