@@ -613,11 +613,17 @@ export class DashboardService {
 
   /**
    * Preenche lacunas de datas com 0 agendamentos para garantir que todos os dias do período sejam incluídos
+   * Só preenche a partir do primeiro registro real para evitar dados zerados desnecessários
    */
   private fillDateGapsForAppointments(appointmentsData: DailyAppointmentsData[], startDate?: string, endDate?: string): DailyAppointmentsData[] {
     // Se não temos startDate e endDate, retornar os dados originais
     if (!startDate || !endDate) {
       return appointmentsData;
+    }
+
+    // Se não há dados, retornar array vazio
+    if (appointmentsData.length === 0) {
+      return [];
     }
 
     try {
@@ -627,12 +633,24 @@ export class DashboardService {
         dataMap.set(item.day, item.appointments_per_day);
       });
 
-      // Gerar todas as datas no período
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      // Encontrar a primeira e última data com dados reais
+      const sortedData = appointmentsData.sort((a, b) => a.day.localeCompare(b.day));
+      const firstDataDate = new Date(sortedData[0].day);
+      const lastDataDate = new Date(sortedData[sortedData.length - 1].day);
+
+      // Usar a data mais restritiva entre o filtro e os dados reais
+      const effectiveStartDate = new Date(Math.max(new Date(startDate).getTime(), firstDataDate.getTime()));
+      const effectiveEndDate = new Date(Math.min(new Date(endDate).getTime(), lastDataDate.getTime()));
+
+      // Se a data de início efetiva é maior que a de fim, não há dados no período
+      if (effectiveStartDate > effectiveEndDate) {
+        return [];
+      }
+
       const result: DailyAppointmentsData[] = [];
 
-      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+      // Gerar datas apenas no período efetivo (do primeiro ao último registro real)
+      for (let date = new Date(effectiveStartDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
         const dayStr = date.toISOString().split('T')[0]; // Formato YYYY-MM-DD
         const appointments = dataMap.get(dayStr) || 0;
         
