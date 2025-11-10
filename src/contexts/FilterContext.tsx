@@ -36,8 +36,9 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     setFilters(prev => ({
       ...prev,
       selectedPeriod: days,
-      // Limpar dateRange quando usar período predefinido
-      dateRange: days ? null : prev.dateRange,
+      // Manter dateRange para que componentes que dependem dele (charts) funcionem com presets
+      // DateRangePicker já sincroniza o range ao escolher presets
+      dateRange: prev.dateRange,
     }));
   };
 

@@ -32,7 +32,8 @@ const PREDEFINED_RANGES: PresetRange[] = [
   {
     label: 'Últimos 7 dias',
     range: () => ({
-      startDate: subDays(new Date(), 7),
+      // Ajuste para contar exatamente 7 dias (intervalo inclusivo)
+      startDate: subDays(new Date(), 6),
       endDate: new Date(),
     }),
     days: 7,
