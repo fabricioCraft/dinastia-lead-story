@@ -908,7 +908,11 @@ export class DashboardService {
     }
   }
 
-  async getLeadsByClassification(): Promise<LeadsByClassificationData[]> {
+  async getLeadsByClassification(
+    startDate?: string,
+    endDate?: string,
+    days?: number
+  ): Promise<LeadsByClassificationData[]> {
     try {
       const client = this.supabaseService.getClient();
       if (!client) {
@@ -916,12 +920,25 @@ export class DashboardService {
       }
 
       try {
-        const sql = `
+        let sql = `
           SELECT 
             TRIM(classificacao_do_lead) AS classification_name,
             COUNT(*) AS lead_count
           FROM public.leads2
           WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) <> ''
+        `;
+        const params: string[] = [];
+        if (typeof days === 'number' && days > 0) {
+          sql += ` AND datacriacao >= NOW() - INTERVAL '${days} days'`;
+        } else {
+          if (startDate) {
+            sql += ` AND datacriacao >= '${startDate}T00:00:00.000Z'`;
+          }
+          if (endDate) {
+            sql += ` AND datacriacao <= '${endDate}T23:59:59.999Z'`;
+          }
+        }
+        sql += `
           GROUP BY TRIM(classificacao_do_lead)
           ORDER BY lead_count DESC;
         `;
@@ -939,12 +956,27 @@ export class DashboardService {
       const pageSize = 1000;
       let hasMore = true;
       while (hasMore) {
-        const { data, error } = await client
+        let query = client
           .from('leads2')
-          .select('classificacao_do_lead')
+          .select('classificacao_do_lead, datacriacao')
           .not('classificacao_do_lead', 'is', null)
-          .neq('classificacao_do_lead', '')
-          .range(from, from + pageSize - 1);
+          .neq('classificacao_do_lead', '');
+
+        if (typeof days === 'number' && days > 0) {
+          const now = new Date();
+          const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+          query = query.gte('datacriacao', start.toISOString());
+        } else {
+          if (startDate) {
+            query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+          }
+          if (endDate) {
+            query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
+          }
+        }
+
+        query = query.range(from, from + pageSize - 1);
+        const { data, error } = await query;
         if (error) {
           throw new Error(error.message);
         }

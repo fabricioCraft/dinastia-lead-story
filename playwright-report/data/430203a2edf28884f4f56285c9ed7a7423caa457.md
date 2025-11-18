@@ -1,0 +1,179 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - region "Notifications alt+T"
+    - main [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - heading "Jornada do Lead Dinastia" [level=1] [ref=e9]
+            - paragraph [ref=e10]: Transformando dados em histórias de sucesso
+          - button "Todos os períodos" [ref=e13] [cursor=pointer]:
+            - img
+            - generic [ref=e14]: Todos os períodos
+            - img
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - generic [ref=e18]: Capítulo 1
+            - heading "De Onde Nossos Leads Vêm?" [level=2] [ref=e20]
+            - paragraph [ref=e21]: Entenda a origem e distribuição dos seus leads por canal de aquisição
+          - generic [ref=e22]:
+            - generic [ref=e23]:
+              - generic [ref=e24]:
+                - img [ref=e25]
+                - heading "Volume Diário de Leads" [level=3] [ref=e28]
+              - paragraph [ref=e29]: Evolução diária da aquisição de leads
+              - generic [ref=e30]:
+                - generic [ref=e31]:
+                  - paragraph [ref=e32]: 11,529
+                  - paragraph [ref=e33]: Total de Leads
+                - generic [ref=e34]:
+                  - paragraph [ref=e35]: "47"
+                  - paragraph [ref=e36]: Média Diária
+                - generic [ref=e37]:
+                  - paragraph [ref=e38]: "204"
+                  - paragraph [ref=e39]: Pico Diário
+              - img [ref=e43]:
+                - generic [ref=e49]:
+                  - generic [ref=e51]: 03/03
+                  - generic [ref=e53]: 11/03
+                  - generic [ref=e55]: 19/03
+                  - generic [ref=e57]: 27/03
+                  - generic [ref=e59]: 05/04
+                  - generic [ref=e61]: 15/04
+                  - generic [ref=e63]: 24/04
+                  - generic [ref=e65]: 03/05
+                  - generic [ref=e67]: 11/05
+                  - generic [ref=e69]: 19/05
+                  - generic [ref=e71]: 27/05
+                  - generic [ref=e73]: 05/06
+                  - generic [ref=e75]: 14/06
+                  - generic [ref=e77]: 23/06
+                  - generic [ref=e79]: 01/07
+                  - generic [ref=e81]: 09/07
+                  - generic [ref=e83]: 17/07
+                  - generic [ref=e85]: 25/07
+                  - generic [ref=e87]: 03/08
+                  - generic [ref=e89]: 11/08
+                  - generic [ref=e91]: 19/08
+                  - generic [ref=e93]: 27/08
+                  - generic [ref=e95]: 05/09
+                  - generic [ref=e97]: 14/09
+                  - generic [ref=e99]: 23/09
+                  - generic [ref=e101]: 01/10
+                  - generic [ref=e103]: 09/10
+                  - generic [ref=e105]: 17/10
+                  - generic [ref=e107]: 01/11
+                - generic [ref=e109]:
+                  - generic [ref=e111]: "0"
+                  - generic [ref=e113]: "55"
+                  - generic [ref=e115]: "110"
+                  - generic [ref=e117]: "165"
+                  - generic [ref=e119]: "220"
+              - generic [ref=e366]:
+                - generic [ref=e367]: "Período: 243 dias"
+                - generic [ref=e368]: Atualizado automaticamente
+            - generic [ref=e369]:
+              - heading "Origem dos Leads" [level=4] [ref=e370]
+              - generic [ref=e371]:
+                - generic [ref=e373]:
+                  - generic [ref=e374]:
+                    - img [ref=e375]
+                    - combobox [ref=e377]:
+                      - 'option "Min: 1 lead" [selected]'
+                      - 'option "Min: 2 leads"'
+                      - 'option "Min: 5 leads"'
+                      - 'option "Min: 10 leads"'
+                  - button "Ver Tudo" [ref=e378] [cursor=pointer]:
+                    - img
+                    - text: Ver Tudo
+                - img [ref=e382]:
+                  - generic [ref=e388]:
+                    - generic [ref=e390]: "0"
+                    - generic [ref=e392]: "200"
+                    - generic [ref=e394]: "400"
+                    - generic [ref=e396]: "600"
+                    - generic [ref=e398]: "800"
+                  - generic [ref=e400]:
+                    - generic [ref=e402]: Isca Hormozi
+                    - generic [ref=e404]: Isca Scopeline
+                    - generic [ref=e406]: YouTube
+                    - generic [ref=e408]: Manychat
+                    - generic [ref=e410]: Sem Origem
+                    - generic [ref=e412]: Agendamento
+                    - generic [ref=e414]: Calendly
+                - generic [ref=e432]:
+                  - generic [ref=e433]:
+                    - paragraph [ref=e434]: Principal Origem
+                    - paragraph [ref=e435]: Isca Hormozi
+                    - generic [ref=e436]: 633 leads
+                  - generic [ref=e437]:
+                    - paragraph [ref=e438]: Origens Únicas
+                    - paragraph [ref=e439]: "7"
+                    - generic [ref=e440]: 7 visíveis
+                  - generic [ref=e441]:
+                    - paragraph [ref=e442]: Concentração
+                    - paragraph [ref=e443]: 89.5%
+                    - generic [ref=e444]: Top 3 origens
+                  - generic [ref=e445]:
+                    - paragraph [ref=e446]: Média por Origem
+                    - paragraph [ref=e447]: "140"
+                    - generic [ref=e448]: leads/origem
+        - generic [ref=e449]:
+          - generic [ref=e450]:
+            - generic [ref=e452]: Capítulo 2
+            - heading "Performance de Agendamentos" [level=2] [ref=e454]
+            - paragraph [ref=e455]: Acompanhe a conversão de leads em agendamentos e o volume diário de reuniões marcadas
+          - generic [ref=e457]:
+            - generic [ref=e458]:
+              - img [ref=e459]
+              - heading "Volume Diário de Agendamentos" [level=3] [ref=e462]
+            - paragraph [ref=e463]: Evolução diária dos agendamentos realizados
+            - generic [ref=e464]:
+              - generic [ref=e465]:
+                - paragraph [ref=e466]: "66"
+                - paragraph [ref=e467]: Total de Agendamentos
+              - generic [ref=e468]:
+                - paragraph [ref=e469]: "3"
+                - paragraph [ref=e470]: Média Diária
+              - generic [ref=e471]:
+                - paragraph [ref=e472]: "10"
+                - paragraph [ref=e473]: Pico Diário
+            - img [ref=e477]:
+              - generic [ref=e483]:
+                - generic [ref=e485]: 23/09
+                - generic [ref=e487]: 24/09
+                - generic [ref=e489]: 25/09
+                - generic [ref=e491]: 26/09
+                - generic [ref=e493]: 28/09
+                - generic [ref=e495]: 30/09
+                - generic [ref=e497]: 01/10
+                - generic [ref=e499]: 02/10
+                - generic [ref=e501]: 06/10
+                - generic [ref=e503]: 07/10
+                - generic [ref=e505]: 08/10
+                - generic [ref=e507]: 09/10
+                - generic [ref=e509]: 10/10
+                - generic [ref=e511]: 13/10
+                - generic [ref=e513]: 14/10
+                - generic [ref=e515]: 17/10
+                - generic [ref=e517]: 18/10
+                - generic [ref=e519]: 20/10
+                - generic [ref=e521]: 23/10
+                - generic [ref=e523]: 27/10
+                - generic [ref=e525]: 30/10
+              - generic [ref=e527]:
+                - generic [ref=e529]: "0"
+                - generic [ref=e531]: "3"
+                - generic [ref=e533]: "6"
+                - generic [ref=e535]: "9"
+                - generic [ref=e537]: "12"
+            - generic [ref=e562]:
+              - generic [ref=e563]: "Período: 21 dias"
+              - generic [ref=e564]: Atualizado automaticamente
+  - generic [ref=e565]: "55"
+```

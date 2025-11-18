@@ -1,6 +1,8 @@
 import React from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLeadClassification } from '@/hooks/useLeadClassification'
+import { useFilters } from '@/contexts/FilterContext'
+import { format } from 'date-fns'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 const COLORS = [
@@ -8,7 +10,14 @@ const COLORS = [
 ]
 
 export function LeadClassificationChart() {
-  const { data, isLoading, error } = useLeadClassification()
+  const { filters } = useFilters()
+  const filterParams = filters.selectedPeriod
+    ? { days: filters.selectedPeriod }
+    : {
+        startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+        endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
+      }
+  const { data, isLoading, error } = useLeadClassification(filterParams)
 
   if (isLoading) {
     return (

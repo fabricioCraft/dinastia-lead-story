@@ -486,8 +486,8 @@ export class TestSqlController {
           error = e;
         }
       } else {
-        // Para outras queries, tentar RPC
-        const rpcResult = await client.rpc('exec', { sql });
+        // Para outras queries, executar via função RPC existente execute_sql
+        const rpcResult = await client.rpc('execute_sql', { query: sql });
         data = rpcResult.data;
         error = rpcResult.error;
       }

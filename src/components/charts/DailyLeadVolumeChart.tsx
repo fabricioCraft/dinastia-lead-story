@@ -71,10 +71,12 @@ export function DailyLeadVolumeChart() {
   
   // Construir objeto de filtros para o hook
   // Usar formatação local para evitar problemas de fuso horário
-  const filterParams = {
-    startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
-    endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
-  };
+  const filterParams = filters.selectedPeriod
+    ? { days: filters.selectedPeriod }
+    : {
+        startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+        endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
+      };
   
   const { data, isLoading, error } = useDailyLeadVolume(filterParams);
 

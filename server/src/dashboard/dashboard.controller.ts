@@ -70,8 +70,13 @@ export class DashboardController {
   @Get('leads-by-classification')
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(3600)
-  async getLeadsByClassification() {
-    return this.dashboardService.getLeadsByClassification();
+  async getLeadsByClassification(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber);
   }
 
 

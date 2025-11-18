@@ -8,6 +8,7 @@ export interface DailyAppointmentsData {
 export interface DailyAppointmentsFilters {
   startDate?: string;
   endDate?: string;
+  days?: number;
 }
 
 /**
@@ -28,6 +29,10 @@ export function useDailyAppointments(filters?: DailyAppointmentsFilters) {
       
       if (filters?.endDate) {
         params.append('endDate', filters.endDate);
+      }
+      
+      if (typeof filters?.days === 'number' && filters.days > 0) {
+        params.append('days', String(filters.days));
       }
       
       const url = `/api/dashboard/daily-appointments${params.toString() ? `?${params.toString()}` : ''}`;

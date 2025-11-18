@@ -8,6 +8,7 @@ export interface DailyLeadVolumeData {
 export interface DailyLeadVolumeFilters {
   startDate?: string;
   endDate?: string;
+  days?: number;
 }
 
 /**
@@ -39,6 +40,10 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
       
       if (filters?.endDate) {
         params.append('endDate', filters.endDate);
+      }
+      
+      if (typeof filters?.days === 'number' && filters.days > 0) {
+        params.append('days', String(filters.days));
       }
       
       const url = `/api/dashboard/daily-lead-volume${params.toString() ? `?${params.toString()}` : ''}`;
