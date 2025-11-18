@@ -1,28 +1,32 @@
 import { DashboardService } from './dashboard.service';
 import { SupabaseService } from '../services/supabase.service';
-import { N8nAnalyticsService } from '../services/n8n-analytics.service';
 
 // Mocks
 const mockSupabaseService = {
   getClient: jest.fn().mockReturnValue({
-    rpc: jest.fn().mockResolvedValue({
-      data: [
-        { day: '2024-01-01', total_leads_per_day: 10 },
-        { day: '2024-01-02', total_leads_per_day: 15 },
-        { day: '2024-01-03', total_leads_per_day: 8 }
-      ],
-      error: null
+    from: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        not: jest.fn().mockReturnValue({
+          gte: jest.fn().mockReturnThis(),
+          lte: jest.fn().mockReturnThis(),
+          range: jest.fn().mockResolvedValue({
+            data: [
+              { datacriacao: '2024-01-01T10:00:00.000Z' },
+              { datacriacao: '2024-01-01T12:30:00.000Z' },
+              { datacriacao: '2024-01-02T08:15:00.000Z' }
+            ],
+            error: null
+          })
+        })
+      })
     })
   })
 } as unknown as SupabaseService;
 
-const mockN8nAnalyticsService = {
-  // Mock methods if needed
-} as unknown as N8nAnalyticsService;
 
 describe('DashboardService.getFunnelBreakdownForOrigin', () => {
   it('should return empty array (now returns empty - data from N8N)', async () => {
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseService);
+    const service = new DashboardService(mockSupabaseService);
 
     const result = await service.getFunnelBreakdownForOrigin('manychat');
 
@@ -30,7 +34,7 @@ describe('DashboardService.getFunnelBreakdownForOrigin', () => {
   });
 
   it('should return empty array with days filter (now returns empty - data from N8N)', async () => {
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseService);
+    const service = new DashboardService(mockSupabaseService);
 
     const result = await service.getFunnelBreakdownForOrigin('manychat', 7);
 
@@ -46,14 +50,16 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
         from: jest.fn().mockReturnValue({
           select: jest.fn().mockReturnValue({
             not: jest.fn().mockReturnValue({
-              neq: jest.fn().mockResolvedValue({
-                data: [
-                  { etapa: 'Qualificação' },
-                  { etapa: 'Qualificação' },
-                  { etapa: 'Prospecção' },
-                  { etapa: 'Follow-up' }
-                ],
-                error: null
+              neq: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({
+                  data: [
+                    { etapa: 'Qualificação' },
+                    { etapa: 'Qualificação' },
+                    { etapa: 'Prospecção' },
+                    { etapa: 'Follow-up' }
+                  ],
+                  error: null
+                })
               })
             })
           })
@@ -61,7 +67,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForStage);
+    const service = new DashboardService(mockSupabaseServiceForStage);
 
     const result = await service.getDashboardLeadsByStage();
 
@@ -90,16 +96,18 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
         from: jest.fn().mockReturnValue({
           select: jest.fn().mockReturnValue({
             not: jest.fn().mockReturnValue({
-              neq: jest.fn().mockResolvedValue({
-                data: [
-                  { etapa: 'Qualificação' },
-                  { etapa: 'Qualificação' },
-                  { etapa: 'Qualificação' },
-                  { etapa: 'Prospecção' },
-                  { etapa: 'Prospecção' },
-                  { etapa: 'Follow-up' }
-                ],
-                error: null
+              neq: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({
+                  data: [
+                    { etapa: 'Qualificação' },
+                    { etapa: 'Qualificação' },
+                    { etapa: 'Qualificação' },
+                    { etapa: 'Prospecção' },
+                    { etapa: 'Prospecção' },
+                    { etapa: 'Follow-up' }
+                  ],
+                  error: null
+                })
               })
             })
           })
@@ -107,7 +115,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForStage);
+    const service = new DashboardService(mockSupabaseServiceForStage);
 
     const result = await service.getDashboardLeadsByStage();
 
@@ -125,9 +133,11 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
         from: jest.fn().mockReturnValue({
           select: jest.fn().mockReturnValue({
             not: jest.fn().mockReturnValue({
-              neq: jest.fn().mockResolvedValue({
-                data: [],
-                error: null
+              neq: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({
+                  data: [],
+                  error: null
+                })
               })
             })
           })
@@ -135,7 +145,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceEmpty);
+    const service = new DashboardService(mockSupabaseServiceEmpty);
 
     const result = await service.getDashboardLeadsByStage();
 
@@ -149,9 +159,11 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
         from: jest.fn().mockReturnValue({
           select: jest.fn().mockReturnValue({
             not: jest.fn().mockReturnValue({
-              neq: jest.fn().mockResolvedValue({
-                data: null,
-                error: { message: 'Database connection error' }
+              neq: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: 'Database connection error' }
+                })
               })
             })
           })
@@ -159,7 +171,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceError);
+    const service = new DashboardService(mockSupabaseServiceError);
 
     await expect(service.getDashboardLeadsByStage()).rejects.toThrow('Database connection error');
   });
@@ -170,18 +182,20 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
         from: jest.fn().mockReturnValue({
           select: jest.fn().mockReturnValue({
             not: jest.fn().mockReturnValue({
-              neq: jest.fn().mockResolvedValue({
-                data: [
-                  { etapa: 'noshow' },
-                  { etapa: 'no_show' },
-                  { etapa: 'no_show' },
-                  { etapa: 'agendado' },
-                  { etapa: 'agendados' },
-                  { etapa: 'follow_up' },
-                  { etapa: 'novo lead' },
-                  { etapa: 'novo lead' }
-                ],
-                error: null
+              neq: jest.fn().mockReturnValue({
+                limit: jest.fn().mockResolvedValue({
+                  data: [
+                    { etapa: 'noshow' },
+                    { etapa: 'no_show' },
+                    { etapa: 'no_show' },
+                    { etapa: 'agendado' },
+                    { etapa: 'agendados' },
+                    { etapa: 'follow_up' },
+                    { etapa: 'novo lead' },
+                    { etapa: 'novo lead' }
+                  ],
+                  error: null
+                })
               })
             })
           })
@@ -189,7 +203,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceConsolidation);
+    const service = new DashboardService(mockSupabaseServiceConsolidation);
 
     const result = await service.getDashboardLeadsByStage();
 
@@ -226,7 +240,7 @@ describe('DashboardService.getDashboardLeadsByStage', () => {
 
 describe('DashboardService.getDailyLeadVolume', () => {
   it('should return array of daily lead volume data with correct format', async () => {
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseService);
+    const service = new DashboardService(mockSupabaseService);
 
     const result = await service.getDailyLeadVolume();
 
@@ -250,7 +264,7 @@ describe('DashboardService.getDailyLeadVolume', () => {
   });
 
   it('should return data ordered by day ascending', async () => {
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseService);
+    const service = new DashboardService(mockSupabaseService);
 
     const result = await service.getDailyLeadVolume();
 
@@ -265,7 +279,7 @@ describe('DashboardService.getDailyLeadVolume', () => {
   });
 
   it('should handle date range filters correctly', async () => {
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseService);
+    const service = new DashboardService(mockSupabaseService);
     const startDate = '2024-01-01';
     const endDate = '2024-01-31';
 
@@ -287,6 +301,66 @@ describe('DashboardService.getDailyLeadVolume', () => {
   });
 });
 
+describe('DashboardService.getLeadsByClassification', () => {
+  it('should return array with classification_name and lead_count', async () => {
+    const mockClient = {
+      rpc: jest.fn().mockResolvedValue({
+        data: [
+          { classification_name: 'Hot', lead_count: '5' },
+          { classification_name: 'Cold', lead_count: '3' }
+        ],
+        error: null
+      })
+    };
+    const mockSupabase = { getClient: jest.fn().mockReturnValue(mockClient) } as unknown as SupabaseService;
+    const service = new DashboardService(mockSupabase);
+    const result = await service.getLeadsByClassification();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[0]).toHaveProperty('classification_name');
+    expect(result[0]).toHaveProperty('lead_count');
+    expect(typeof result[0].classification_name).toBe('string');
+    expect(typeof result[0].lead_count).toBe('number');
+    expect(result[0].lead_count).toBeGreaterThanOrEqual(result[1].lead_count);
+  });
+
+  it('should fallback aggregate when rpc not available', async () => {
+    const mockClient = {
+      rpc: jest.fn().mockRejectedValue(new Error('rpc not available')),
+      from: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          not: jest.fn().mockReturnValue({
+            neq: jest.fn().mockReturnValue({
+              range: jest.fn().mockReturnValue({
+                then: undefined
+              })
+            })
+          })
+        })
+      })
+    };
+    mockClient.from().select().not().neq().range = jest.fn().mockReturnValue({
+      data: [
+        { classificacao_do_lead: 'Warm', chatid: '1' },
+        { classificacao_do_lead: 'Warm', chatid: '2' },
+        { classificacao_do_lead: 'Cold', chatid: '3' }
+      ],
+      error: null
+    });
+    const mockSupabase = { getClient: jest.fn().mockReturnValue(mockClient) } as unknown as SupabaseService;
+    const service = new DashboardService(mockSupabase);
+    const result = await service.getLeadsByClassification();
+    const warm = result.find(r => r.classification_name === 'Warm');
+    const cold = result.find(r => r.classification_name === 'Cold');
+    expect(warm?.lead_count).toBe(2);
+    expect(cold?.lead_count).toBe(1);
+    if (result.length > 1) {
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i - 1].lead_count).toBeGreaterThanOrEqual(result[i].lead_count);
+      }
+    }
+  });
+});
+
 describe('DashboardService.getUnifiedOriginSummary', () => {
   it('should return unified and normalized origin data with correct format', async () => {
     // Mock do Supabase para retornar dados simulados das duas tabelas
@@ -304,7 +378,7 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForOrigin);
+    const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     const result = await service.getUnifiedOriginSummary();
 
@@ -343,7 +417,7 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForOrigin);
+    const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     const result = await service.getUnifiedOriginSummary();
 
@@ -370,7 +444,7 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForOrigin);
+    const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     const result = await service.getUnifiedOriginSummary();
 
@@ -396,7 +470,7 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForOrigin);
+    const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     const result = await service.getUnifiedOriginSummary();
 
@@ -414,7 +488,7 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
       })
     } as unknown as SupabaseService;
 
-    const service = new DashboardService(mockN8nAnalyticsService, mockSupabaseServiceForOrigin);
+    const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     await expect(service.getUnifiedOriginSummary()).rejects.toThrow();
   });

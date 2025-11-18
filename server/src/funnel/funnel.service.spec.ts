@@ -10,7 +10,7 @@ describe('FunnelService', () => {
   beforeEach(() => {
     mockSupabaseService = {
       getAverageTimeInStageFromHistory: jest.fn(),
-      getAverageTimeInStageFromTimestamps: jest.fn(),
+      getAverageTimeInStageWithOngoing: jest.fn(),
       getSchedulingRate: jest.fn(),
     } as any;
 
@@ -42,7 +42,7 @@ describe('FunnelService', () => {
     const result = await service.getTimeInStage();
     
     expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalledTimes(1);
-    expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).not.toHaveBeenCalled();
+    expect(mockSupabaseService.getAverageTimeInStageWithOngoing).not.toHaveBeenCalled();
     expect(result).toHaveLength(5);
     expect(result[0]).toEqual({
       stage: "Novos Leads",
@@ -73,15 +73,15 @@ describe('FunnelService', () => {
 
   it('should handle empty data gracefully', async () => {
     const mockHistoryData: StageAverageTime[] = [];
-    const mockTimestampData = [];
+    const mockTimestampData: Array<{ stage_name: string; avg_duration_seconds: number }> = [];
     
     mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
-    mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+    mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
     
     const result = await service.getTimeInStage();
     
     expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalledTimes(1);
-    expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalledTimes(1);
+    expect(mockSupabaseService.getAverageTimeInStageWithOngoing).toHaveBeenCalledTimes(1);
     expect(result).toEqual([]);
   });
 
@@ -96,15 +96,15 @@ describe('FunnelService', () => {
   // Teste relacionado ao kommo_leads_snapshot removido - não utilizamos mais essa integração
 
     it('deve calcular durações precisas usando EXTRACT(EPOCH FROM ...)', async () => {
-      const mockHistoryData: StageAverageTime[] = [];
-      const mockTimestampData = [
-        { stage_name: 'Novos Leads', avg_duration_seconds: 172800 }, // 2 dias
-        { stage_name: 'Tentado Conexão', avg_duration_seconds: 86400 }, // 1 dia
-        { stage_name: 'Conectado/Qualificação', avg_duration_seconds: 259200 }, // 3 dias
-      ];
+    const mockHistoryData: StageAverageTime[] = [];
+    const mockTimestampData = [
+      { stage_name: 'Novos Leads', avg_duration_seconds: 172800 },
+      { stage_name: 'Tentado Conexão', avg_duration_seconds: 86400 },
+      { stage_name: 'Conectado/Qualificação', avg_duration_seconds: 259200 },
+    ];
 
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
 
       const result = await service.getTimeInStage();
 
@@ -127,7 +127,7 @@ describe('FunnelService', () => {
       ];
 
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
 
       const result = await service.getTimeInStage();
 
@@ -141,16 +141,16 @@ describe('FunnelService', () => {
         { stage_name: 'Novos Leads', avg_duration_seconds: 172800 },
         { stage_name: 'Tentado Conexão', avg_duration_seconds: 86400 },
         { stage_name: 'Conectado/Qualificação', avg_duration_seconds: 259200 },
-        { stage_name: 'Closers em Contato', avg_duration_seconds: 345600 },
+        { stage_name: 'Oportunidade', avg_duration_seconds: 345600 },
         { stage_name: 'Negociação', avg_duration_seconds: 432000 },
       ];
 
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
 
       const result = await service.getTimeInStage();
 
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalled();
+      expect(mockSupabaseService.getAverageTimeInStageWithOngoing).toHaveBeenCalled();
       expect(result).toHaveLength(5);
       expect(result.map(r => r.stage)).toEqual([
         'Novos Leads',
@@ -177,80 +177,80 @@ describe('FunnelService', () => {
       const result = await service.getTimeInStage();
 
       expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalled();
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).not.toHaveBeenCalled();
+      expect(mockSupabaseService.getAverageTimeInStageWithOngoing).not.toHaveBeenCalled();
       expect(result).toEqual(expectedResult);
     });
 
   describe('getTimeInStage - Timestamp-based calculation (TDD)', () => {
-    it('should use timestamp-based calculation when history service returns empty data', async () => {
+    it('should use ongoing timestamp-based calculation when history service returns empty data', async () => {
       // Arrange: Mock history service to return empty data (fallback scenario)
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue([]);
       
       // Mock timestamp-based data
       const mockTimestampData = [
-        { stage_name: "Leads Novos", avg_duration_seconds: 86400 }, // 1 dia
-        { stage_name: "Closers em Contato", avg_duration_seconds: 172800 }, // 2 dias
-        { stage_name: "Agendados", avg_duration_seconds: 259200 }, // 3 dias
-        { stage_name: "Call Realizada", avg_duration_seconds: 345600 }, // 4 dias
-        { stage_name: "Vendas", avg_duration_seconds: 432000 }, // 5 dias
+        { stage_name: "Novos Leads", avg_duration_seconds: 86400 },
+        { stage_name: "Tentado Conexão", avg_duration_seconds: 172800 },
+        { stage_name: "Conectado/Qualificação", avg_duration_seconds: 259200 },
+        { stage_name: "Oportunidade", avg_duration_seconds: 345600 },
+        { stage_name: "Negociação", avg_duration_seconds: 432000 },
       ];
       
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
       
       // Act
       const result = await service.getTimeInStage();
       
       // Assert
       expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalledTimes(1);
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalledTimes(1);
+      expect(mockSupabaseService.getAverageTimeInStageWithOngoing).toHaveBeenCalledTimes(1);
       expect(result).toHaveLength(5);
       expect(result[0]).toEqual({
-        stage: "Leads Novos",
+        stage: "Novos Leads",
         averageTimeInDays: 1.0,
         averageTimeInSeconds: 86400
       });
       expect(result[1]).toEqual({
-        stage: "Closers em Contato",
+        stage: "Tentado Conexão",
         averageTimeInDays: 2.0,
         averageTimeInSeconds: 172800
       });
     });
 
-    it('should correctly calculate average durations using SQL EXTRACT(EPOCH FROM ...) function', async () => {
+    it('should correctly calculate average durations using ongoing timestamp calculations', async () => {
       // Arrange: Mock history service to return empty data (force timestamp fallback)
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue([]);
       
       // Mock realistic timestamp-based calculations
       const mockTimestampData = [
-        { stage_name: "Leads Novos", avg_duration_seconds: 129600 }, // 1.5 dias
-        { stage_name: "Closers em Contato", avg_duration_seconds: 216000 }, // 2.5 dias
-        { stage_name: "Agendados", avg_duration_seconds: 302400 }, // 3.5 dias
-        { stage_name: "Call Realizada", avg_duration_seconds: 388800 }, // 4.5 dias
-        { stage_name: "Vendas", avg_duration_seconds: 475200 }, // 5.5 dias
+        { stage_name: "Novos Leads", avg_duration_seconds: 129600 },
+        { stage_name: "Tentado Conexão", avg_duration_seconds: 216000 },
+        { stage_name: "Conectado/Qualificação", avg_duration_seconds: 302400 },
+        { stage_name: "Oportunidade", avg_duration_seconds: 388800 },
+        { stage_name: "Negociação", avg_duration_seconds: 475200 },
       ];
       
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
       
       // Act
       const result = await service.getTimeInStage();
       
       // Assert: Verify SQL function was called and data transformation is correct
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).toHaveBeenCalledTimes(1);
+      expect(mockSupabaseService.getAverageTimeInStageWithOngoing).toHaveBeenCalledTimes(1);
       expect(result).toHaveLength(5);
       
       // Verify precise calculations (rounded to 1 decimal place)
       expect(result[0]).toEqual({
-        stage: "Leads Novos",
+        stage: "Novos Leads",
         averageTimeInDays: 1.5,
         averageTimeInSeconds: 129600
       });
       expect(result[1]).toEqual({
-        stage: "Closers em Contato", 
+        stage: "Tentado Conexão", 
         averageTimeInDays: 2.5,
         averageTimeInSeconds: 216000
       });
       expect(result[2]).toEqual({
-        stage: "Agendados",
+        stage: "Conectado/Qualificação",
         averageTimeInDays: 3.5,
         averageTimeInSeconds: 302400
       });
@@ -262,12 +262,12 @@ describe('FunnelService', () => {
       
       // Mock edge case where some stages have zero duration
       const mockTimestampData = [
-        { stage_name: "Leads Novos", avg_duration_seconds: 0 }, // Transição instantânea
-        { stage_name: "Closers em Contato", avg_duration_seconds: 3600 }, // 1 hora
-        { stage_name: "Agendados", avg_duration_seconds: 1800 }, // 30 minutos
+        { stage_name: "Novos Leads", avg_duration_seconds: 0 },
+        { stage_name: "Tentado Conexão", avg_duration_seconds: 3600 },
+        { stage_name: "Conectado/Qualificação", avg_duration_seconds: 1800 },
       ];
       
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue(mockTimestampData);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue(mockTimestampData);
       
       // Act
       const result = await service.getTimeInStage();
@@ -275,13 +275,13 @@ describe('FunnelService', () => {
       // Assert
       expect(result).toHaveLength(3);
       expect(result[0]).toEqual({
-        stage: "Leads Novos",
+        stage: "Novos Leads",
         averageTimeInDays: 0.0,
         averageTimeInSeconds: 0
       });
       expect(result[1]).toEqual({
-        stage: "Closers em Contato",
-        averageTimeInDays: 0.0, // 3600/86400 = 0.04 -> rounded to 0.0
+        stage: "Tentado Conexão",
+        averageTimeInDays: 0.0,
         averageTimeInSeconds: 3600
       });
     });
@@ -296,14 +296,14 @@ describe('FunnelService', () => {
       mockLeadStageHistoryService.getAverageTimePerStage.mockResolvedValue(mockHistoryData);
       
       // Mock timestamp data (should NOT be called)
-      mockSupabaseService.getAverageTimeInStageFromTimestamps.mockResolvedValue([]);
+      mockSupabaseService.getAverageTimeInStageWithOngoing.mockResolvedValue([]);
       
       // Act
       const result = await service.getTimeInStage();
       
       // Assert: Verify history service is used and timestamp service is NOT called
       expect(mockLeadStageHistoryService.getAverageTimePerStage).toHaveBeenCalledTimes(1);
-      expect(mockSupabaseService.getAverageTimeInStageFromTimestamps).not.toHaveBeenCalled();
+      expect(mockSupabaseService.getAverageTimeInStageWithOngoing).not.toHaveBeenCalled();
       expect(result).toHaveLength(1);
       expect(result[0].stage).toBe("Leads Novos");
     });
