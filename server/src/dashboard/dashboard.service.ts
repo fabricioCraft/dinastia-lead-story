@@ -45,6 +45,11 @@ export interface UnifiedOriginSummaryData {
   lead_count: number;
 }
 
+export interface LeadsByClassificationData {
+  classification_name: string;
+  lead_count: number;
+}
+
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
@@ -122,18 +127,76 @@ export class DashboardService {
 
   async getDailyLeadVolume(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    days?: number
   ): Promise<DailyLeadVolumeData[]> {
     try {
       this.logger.log('Buscando dados de volume diário de leads');
-      this.logger.log(`Filtros recebidos - startDate: ${startDate}, endDate: ${endDate}`);
+      this.logger.log(`Filtros recebidos - startDate: ${startDate}, endDate: ${endDate}, days: ${days}`);
 
-      // Usar diretamente o método direto que tem limit explícito
-      // A função execute_sql pode não estar aplicando os filtros corretamente
+      if (typeof days === 'number' && days > 0) {
+        return await this.getDailyLeadVolumeLastDays(days);
+      }
+
       return await this.getDailyLeadVolumeDirectQuery(startDate, endDate);
 
     } catch (error) {
       this.logger.error('Erro ao buscar dados de volume diário:', error);
+      throw error;
+    }
+  }
+
+  private async getDailyLeadVolumeLastDays(days: number): Promise<DailyLeadVolumeData[]> {
+    try {
+      this.logger.log(`Buscando volume diário de leads para últimos ${days} dias (apenas leads2) com paginação`);
+
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Cliente Supabase não inicializado');
+      }
+
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+      const allLeads2Data: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await client
+          .from('leads2')
+          .select('datacriacao')
+          .gte('datacriacao', windowStart.toISOString())
+          .lte('datacriacao', now.toISOString())
+          .range(from, from + pageSize - 1);
+
+        if (error) {
+          this.logger.error('Erro ao buscar dados de leads2:', error);
+          throw new Error(`Erro na consulta leads2: ${error.message}`);
+        }
+
+        if (data && data.length > 0) {
+          allLeads2Data.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const dailyCounts = new Map<string, number>();
+      allLeads2Data.forEach((lead: any) => {
+        const date = new Date(lead.datacriacao);
+        const day = date.toISOString().split('T')[0];
+        dailyCounts.set(day, (dailyCounts.get(day) || 0) + 1);
+      });
+
+      return Array.from(dailyCounts.entries())
+        .map(([day, total_leads_per_day]) => ({ day, total_leads_per_day }))
+        .sort((a, b) => a.day.localeCompare(b.day));
+    } catch (error) {
+      this.logger.error('Erro na query de últimos dias do volume diário:', error);
       throw error;
     }
   }
@@ -349,7 +412,8 @@ export class DashboardService {
    */
   async getDailyAppointments(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    days?: number
   ): Promise<DailyAppointmentsData[]> {
     try {
       const periodInfo = startDate || endDate ? ` (${startDate || 'início'} até ${endDate || 'fim'})` : '';
@@ -362,59 +426,28 @@ export class DashboardService {
 
       // Query SQL unificada para buscar agendamentos diários de ambas as tabelas
       // com conversão de texto para timestamp e deduplicação
-      let query = `
-        -- Passo 4: Contagem final de agendamentos únicos por dia 
-        SELECT 
-            day, 
-            COUNT(*) as appointments_per_day 
-        FROM ( 
-            -- Passo 3: Garante que cada lead (identificado pelo whatsapp normalizado) seja contado apenas uma vez por dia 
-            SELECT DISTINCT ON (day, normalized_whatsapp) 
-                day 
-            FROM ( 
-                -- Passo 2: Extrai o dia do agendamento e o whatsapp normalizado de cada evento 
-                SELECT 
-                    DATE_TRUNC('day', appointment_timestamp)::date AS day, 
-                    normalized_whatsapp 
-                FROM ( 
-                    -- Passo 1: Unifica os dados de agendamento, convertendo a data e normalizando o whatsapp 
-                    SELECT 
-                        to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') AS appointment_timestamp, 
-                        -- Remove todos os caracteres não numéricos do chatid para normalizá-lo 
-                        regexp_replace(chatid, '\\D', '', 'g') AS normalized_whatsapp 
-                    FROM public.leads2 
-                    WHERE data_do_agendamento IS NOT NULL AND data_do_agendamento <> '' AND chatid IS NOT NULL AND chatid <> '' 
-
-                    UNION ALL 
-
-                    SELECT 
-                        to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') AS appointment_timestamp, 
-                        -- Faz o mesmo para a coluna whatsapp 
-                        regexp_replace(whatsapp, '\\D', '', 'g') AS normalized_whatsapp 
-                    FROM public."MR_base_leads" 
-                    WHERE data_do_agendamento IS NOT NULL AND data_do_agendamento <> '' AND whatsapp IS NOT NULL AND whatsapp <> '' 
-                ) as all_appointment_events 
-            ) as daily_appointments 
-            WHERE normalized_whatsapp IS NOT NULL 
-        ) as unique_daily_appointments
-      `;
-
-      // Adicionar filtros de data se fornecidos
-      const params: any[] = [];
-      if (startDate) {
-        query = query.replace(
-          'WHERE normalized_whatsapp IS NOT NULL',
-          `WHERE normalized_whatsapp IS NOT NULL AND day >= $${params.length + 1}`
-        );
-        params.push(startDate);
-      }
-      if (endDate) {
-        const whereClause = params.length > 0 ? 'AND' : 'WHERE';
-        query = query.replace(
-          'WHERE normalized_whatsapp IS NOT NULL',
-          `WHERE normalized_whatsapp IS NOT NULL ${whereClause} day <= $${params.length + 1}`
-        );
-        params.push(endDate);
+      let query = '';
+      if (typeof days === 'number' && days > 0) {
+        return await this.getDailyAppointmentsFallback(undefined, undefined, days);
+      } else {
+        query = `
+          SELECT 
+            day,
+            COUNT(*) AS appointments_per_day
+          FROM (
+            SELECT 
+              DATE_TRUNC('day', to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS'))::date AS day
+            FROM public.leads2
+            WHERE data_do_agendamento IS NOT NULL AND data_do_agendamento <> ''
+          ) AS events
+          WHERE 1=1
+        `;
+        if (startDate) {
+          query += ` AND day >= '${startDate}'`;
+        }
+        if (endDate) {
+          query += ` AND day <= '${endDate}'`;
+        }
       }
 
       query += `
@@ -423,14 +456,10 @@ export class DashboardService {
       `;
 
       this.logger.log(`Executando query de agendamentos diários: ${query}`);
-      if (params.length > 0) {
-        this.logger.log(`Parâmetros: ${JSON.stringify(params)}`);
-      }
+      
 
-      // Executar a query usando rpc para SQL customizado
       const { data, error } = await client.rpc('execute_sql', {
-        sql_query: query,
-        params: params
+        query: query
       });
 
       if (error) {
@@ -469,39 +498,23 @@ export class DashboardService {
    */
   private async getDailyAppointmentsFallback(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    days?: number
   ): Promise<DailyAppointmentsData[]> {
     try {
-      this.logger.log('Usando fallback unificado para agendamentos diários');
+      this.logger.log('Usando fallback para agendamentos diários apenas da tabela leads2 (sem deduplicação)');
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Buscar agendamentos da tabela MR_base_leads
-      const { data: mrBaseData, error: mrBaseError } = await client
-        .from('MR_base_leads')
-        .select('data_do_agendamento, whatsapp')
-        .not('data_do_agendamento', 'is', null)
-        .neq('data_do_agendamento', '')
-        .not('whatsapp', 'is', null)
-        .neq('whatsapp', '')
-        .order('data_do_agendamento', { ascending: true })
-        .limit(10000);
-
-      if (mrBaseError) {
-        this.logger.error('Erro ao buscar MR_base_leads no fallback:', mrBaseError);
-      }
-
       // Buscar agendamentos da tabela leads2
       const { data: leads2Data, error: leads2Error } = await client
         .from('leads2')
-        .select('data_do_agendamento, chatid')
+        .select('data_do_agendamento')
         .not('data_do_agendamento', 'is', null)
         .neq('data_do_agendamento', '')
-        .not('chatid', 'is', null)
-        .neq('chatid', '')
         .order('data_do_agendamento', { ascending: true })
         .limit(10000);
 
@@ -509,7 +522,7 @@ export class DashboardService {
         this.logger.error('Erro ao buscar leads2 no fallback:', leads2Error);
       }
 
-      const totalRecords = (mrBaseData?.length || 0) + (leads2Data?.length || 0);
+      const totalRecords = (leads2Data?.length || 0);
       if (totalRecords === 0) {
         this.logger.warn('Nenhum dado de agendamentos encontrado no fallback');
         return [];
@@ -517,71 +530,35 @@ export class DashboardService {
 
       this.logger.log(`Processando ${totalRecords} registros de agendamentos no fallback unificado`);
 
-      // Função para normalizar WhatsApp (remove caracteres não numéricos)
-      const normalizeWhatsApp = (whatsapp: string): string => {
-        return whatsapp.replace(/\D/g, '');
-      };
-
-      // Usar Set para deduplicação por dia + WhatsApp normalizado
-      const uniqueAppointments = new Set<string>();
       const dailyCounts = new Map<string, number>();
       let validDatesCount = 0;
       let invalidDatesCount = 0;
-      let duplicatesCount = 0;
-
-      // Processar dados do MR_base_leads
-      (mrBaseData || []).forEach((appointment: any) => {
-        try {
-          const dateStr = appointment.data_do_agendamento;
-          const whatsapp = appointment.whatsapp;
-          
-          const dayKey = this.parseBrazilianDate(dateStr);
-          if (dayKey && whatsapp) {
-            // Aplicar filtros de data se fornecidos
-            if (startDate && dayKey < startDate) return;
-            if (endDate && dayKey > endDate) return;
-            
-            const normalizedWhatsApp = normalizeWhatsApp(whatsapp);
-            const uniqueKey = `${dayKey}|${normalizedWhatsApp}`;
-            if (!uniqueAppointments.has(uniqueKey)) {
-              uniqueAppointments.add(uniqueKey);
-              dailyCounts.set(dayKey, (dailyCounts.get(dayKey) || 0) + 1);
-              validDatesCount++;
-            } else {
-              duplicatesCount++;
-            }
-          } else {
-            invalidDatesCount++;
-          }
-        } catch (error) {
-          this.logger.warn(`Erro ao processar data MR_base_leads no fallback: ${appointment.data_do_agendamento}`, error);
-          invalidDatesCount++;
-        }
-      });
 
       // Processar dados do leads2
       (leads2Data || []).forEach((appointment: any) => {
         try {
           const dateStr = appointment.data_do_agendamento;
-          const chatid = appointment.chatid;
-          
-          const dayKey = this.parseBrazilianDate(dateStr);
-          if (dayKey && chatid) {
-            // Aplicar filtros de data se fornecidos
-            if (startDate && dayKey < startDate) return;
-            if (endDate && dayKey > endDate) return;
-            
-            const normalizedWhatsApp = normalizeWhatsApp(chatid);
-            const uniqueKey = `${dayKey}|${normalizedWhatsApp}`;
-            if (!uniqueAppointments.has(uniqueKey)) {
-              uniqueAppointments.add(uniqueKey);
+          if (!dateStr) { invalidDatesCount++; return; }
+          let ts: Date | null = null;
+          if (typeof days === 'number' && days > 0) {
+            ts = this.parseBrazilianDateTime(dateStr);
+            if (!ts || isNaN(ts.getTime())) { invalidDatesCount++; return; }
+            const now = new Date();
+            const windowStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+            if (ts < windowStart || ts > now) return;
+            const dayKey = ts.toISOString().split('T')[0];
+            dailyCounts.set(dayKey, (dailyCounts.get(dayKey) || 0) + 1);
+            validDatesCount++;
+          } else {
+            const dayKey = this.parseBrazilianDate(dateStr);
+            if (dayKey) {
+              if (startDate && dayKey < startDate) return;
+              if (endDate && dayKey > endDate) return;
               dailyCounts.set(dayKey, (dailyCounts.get(dayKey) || 0) + 1);
               validDatesCount++;
             } else {
-              duplicatesCount++;
+              invalidDatesCount++;
             }
-          } else {
-            invalidDatesCount++;
           }
         } catch (error) {
           this.logger.warn(`Erro ao processar data leads2 no fallback: ${appointment.data_do_agendamento}`, error);
@@ -589,7 +566,7 @@ export class DashboardService {
         }
       });
       
-      this.logger.log(`Fallback unificado processou ${validDatesCount} datas válidas, ignorou ${invalidDatesCount} datas inválidas e ${duplicatesCount} duplicatas`);
+      this.logger.log(`Fallback processou ${validDatesCount} datas válidas e ignorou ${invalidDatesCount} datas inválidas`);
 
       // Converter para array e ordenar
       const appointmentsData: DailyAppointmentsData[] = Array.from(dailyCounts.entries())
@@ -692,6 +669,22 @@ export class DashboardService {
       
       return null;
     } catch (error) {
+      return null;
+    }
+  }
+
+  private parseBrazilianDateTime(dateStr: string): Date | null {
+    try {
+      const m = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})/);
+      if (m) {
+        const [, d, mo, y, h, mi, s] = m;
+        const dt = new Date(parseInt(y), parseInt(mo) - 1, parseInt(d), parseInt(h), parseInt(mi), parseInt(s));
+        if (!isNaN(dt.getTime())) return dt;
+      }
+      const alt = new Date(dateStr);
+      if (!isNaN(alt.getTime())) return alt;
+      return null;
+    } catch {
       return null;
     }
   }
@@ -911,6 +904,68 @@ export class DashboardService {
 
     } catch (error) {
       this.logger.error('Erro ao buscar dados de origem dos leads:', error);
+      throw error;
+    }
+  }
+
+  async getLeadsByClassification(): Promise<LeadsByClassificationData[]> {
+    try {
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      try {
+        const sql = `
+          SELECT 
+            TRIM(classificacao_do_lead) AS classification_name,
+            COUNT(*) AS lead_count
+          FROM public.leads2
+          WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) <> ''
+          GROUP BY TRIM(classificacao_do_lead)
+          ORDER BY lead_count DESC;
+        `;
+        const { data, error } = await client.rpc('execute_sql', { query: sql });
+        if (!error && data && Array.isArray(data)) {
+          return data.map((row: any) => ({
+            classification_name: row.classification_name,
+            lead_count: parseInt(row.lead_count, 10)
+          }));
+        }
+      } catch (_) {}
+
+      const allData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await client
+          .from('leads2')
+          .select('classificacao_do_lead')
+          .not('classificacao_do_lead', 'is', null)
+          .neq('classificacao_do_lead', '')
+          .range(from, from + pageSize - 1);
+        if (error) {
+          throw new Error(error.message);
+        }
+        if (data && data.length > 0) {
+          allData.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      const counts = new Map<string, number>();
+      allData.forEach(item => {
+        const key = String(item.classificacao_do_lead).trim();
+        if (!key) return;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      return Array.from(counts.entries())
+        .map(([classification_name, lead_count]) => ({ classification_name, lead_count }))
+        .sort((a, b) => b.lead_count - a.lead_count);
+    } catch (error) {
       throw error;
     }
   }

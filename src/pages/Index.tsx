@@ -11,6 +11,7 @@ import { SchedulingSummaryCards } from "@/components/SchedulingSummaryCards";
 import { Card } from "@/components/ui/card";
 import DateRangePicker from "@/components/DateRangePicker";
 import { useFilters } from "@/contexts/FilterContext";
+import { LeadClassificationChart } from "@/components/charts/LeadClassificationChart";
 
 
 const Index = () => {
@@ -59,6 +60,13 @@ const Index = () => {
               <Card className="p-6 card-glow border-border/50">
                 <h4 className="text-md font-semibold text-foreground mb-4">Origem dos Leads</h4>
                 <UnifiedOriginChart />
+              </Card>
+            </div>
+
+            <div>
+              <Card className="p-6 card-glow border-border/50">
+                <h4 className="text-md font-semibold text-foreground mb-4">Classificação dos Leads</h4>
+                <LeadClassificationChart />
               </Card>
             </div>
           </section>

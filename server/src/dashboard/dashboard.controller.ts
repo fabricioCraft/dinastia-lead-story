@@ -13,13 +13,14 @@ export class DashboardController {
 
   @Get('daily-lead-volume')
   @UseInterceptors(CacheInterceptor)
-  @CacheKey('daily_lead_volume_data')
   @CacheTTL(3600) // 1 hora - cache para dados de agregação@Get('daily-lead-volume')
   async getDailyLeadVolume(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
   ) {
-    return this.dashboardService.getDailyLeadVolume(startDate, endDate);
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getDailyLeadVolume(startDate, endDate, daysNumber);
   }
 
   @Get('scheduling-summary')
@@ -32,13 +33,14 @@ export class DashboardController {
 
   @Get('daily-appointments')
   @UseInterceptors(CacheInterceptor)
-  @CacheKey('daily_appointments_data')
   @CacheTTL(3600) // 1 hora - cache para dados de agendamentos diários
   async getDailyAppointments(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
   ) {
-    return this.dashboardService.getDailyAppointments(startDate, endDate);
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber);
   }
 
   
@@ -63,6 +65,13 @@ export class DashboardController {
   @CacheTTL(3600) // 1 hora - cache para dados de leads por etapa
   async getLeadsByStage() {
     return this.dashboardService.getDashboardLeadsByStage();
+  }
+
+  @Get('leads-by-classification')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(3600)
+  async getLeadsByClassification() {
+    return this.dashboardService.getLeadsByClassification();
   }
 
 
