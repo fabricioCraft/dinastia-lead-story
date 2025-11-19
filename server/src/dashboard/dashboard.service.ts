@@ -50,6 +50,11 @@ export interface LeadsByClassificationData {
   lead_count: number;
 }
 
+export interface DrilldownItem {
+  name: string;
+  value: number;
+}
+
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
@@ -1072,6 +1077,79 @@ export class DashboardService {
 
     } catch (error) {
       this.logger.error('Erro ao buscar distribuição de leads por etapa:', error);
+      throw error;
+    }
+  }
+
+  async getCampaignDrilldown(campaign?: string, source?: string): Promise<DrilldownItem[]> {
+    try {
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Supabase client not initialized');
+      }
+      let groupByColumn = 'utm_campaign';
+      const whereClauses: string[] = [];
+      const escCampaign = campaign ? campaign.replace(/'/g, "''") : undefined;
+      const escSource = source ? source.replace(/'/g, "''") : undefined;
+      if (escCampaign && escSource) {
+        groupByColumn = 'utm_content';
+        whereClauses.push(`utm_campaign = '${escCampaign}'`);
+        whereClauses.push(`utm_source = '${escSource}'`);
+      } else if (escCampaign) {
+        groupByColumn = 'utm_source';
+        whereClauses.push(`utm_campaign = '${escCampaign}'`);
+      }
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+      const sql = `
+        SELECT ${groupByColumn} AS name, COUNT(chatid) AS value
+        FROM public.leads2
+        ${whereSql ? whereSql + ' AND ' : 'WHERE '}${groupByColumn} IS NOT NULL AND ${groupByColumn} <> ''
+        GROUP BY ${groupByColumn}
+        ORDER BY value DESC;
+      `;
+
+      try {
+        const { data, error } = await client.rpc('execute_sql', { query: sql });
+        if (!error && Array.isArray(data)) {
+          return (data || []).map((row: any) => ({ name: row.name, value: parseInt(row.value, 10) }));
+        }
+      } catch (_) {}
+
+      const counts = new Map<string, number>();
+      const pageSize = 2000;
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        let query = client
+          .from('leads2')
+          .select(`${groupByColumn}`);
+        if (campaign) {
+          query = query.eq('utm_campaign', campaign);
+        }
+        if (source) {
+          query = query.eq('utm_source', source);
+        }
+        query = query.not(groupByColumn as any, 'is', null).neq(groupByColumn as any, '');
+        query = query.range(from, from + pageSize - 1);
+        const { data, error } = await query;
+        if (error) {
+          throw new Error(error.message);
+        }
+        const rows: any[] = data || [];
+        for (const row of rows) {
+          const name = (row as any)[groupByColumn] ?? '';
+          counts.set(name, (counts.get(name) || 0) + 1);
+        }
+        if (rows.length < pageSize) {
+          hasMore = false;
+        } else {
+          from += pageSize;
+        }
+      }
+      return Array.from(counts.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+    } catch (error) {
       throw error;
     }
   }

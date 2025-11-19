@@ -2,7 +2,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChapterHeader } from "@/components/ChapterHeader";
 
-import { UnifiedOriginChart } from "@/components/charts/UnifiedOriginChart";
+import { DrilldownChart } from "@/components/charts/DrilldownChart";
 
 import { DailyLeadVolumeChart } from "@/components/charts/DailyLeadVolumeChart";
 import { DailyAppointmentsChart } from "@/components/charts/DailyAppointmentsChart";
@@ -59,7 +59,7 @@ const Index = () => {
               {/* Gráfico de Origem dos Leads */}
               <Card className="p-6 card-glow border-border/50">
                 <h4 className="text-md font-semibold text-foreground mb-4">Origem dos Leads</h4>
-                <UnifiedOriginChart />
+                <DrilldownChart />
               </Card>
             </div>
 

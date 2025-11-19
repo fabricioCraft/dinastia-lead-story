@@ -79,6 +79,16 @@ export class DashboardController {
     return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber);
   }
 
+  @Get('campaign-drilldown')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(3600)
+  async getCampaignDrilldown(
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+  ) {
+    return this.dashboardService.getCampaignDrilldown(campaign, source);
+  }
+
 
 
 
