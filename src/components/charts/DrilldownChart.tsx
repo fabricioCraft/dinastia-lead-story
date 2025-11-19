@@ -158,7 +158,7 @@ export function DrilldownChart() {
 
       <div style={{ height: showAll ? chartHeight : 400, cursor: isClickable ? 'pointer' : 'default' }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 24, bottom: 20 }} onClick={onChartClick} onMouseMove={onChartMouseMove} onMouseLeave={() => setLastActivePayload(null)} style={{ cursor: isClickable ? 'pointer' : 'default' }}>
+          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 0, bottom: 20 }} onClick={onChartClick} onMouseMove={onChartMouseMove} onMouseLeave={() => setLastActivePayload(null)} style={{ cursor: isClickable ? 'pointer' : 'default' }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis 
               type="number"
