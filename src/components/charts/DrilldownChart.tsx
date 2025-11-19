@@ -5,19 +5,28 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useCampaignDrilldown, DrilldownState, DrilldownItem, DrilldownLevel } from '@/hooks/useCampaignDrilldown'
+import { useFilters } from '@/contexts/FilterContext'
+
+type ChartDatum = { label: string; fullName: string; value: number; percentage: string; color: string }
 
 const COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#84CC16','#F97316','#22C55E','#EAB308']
 
 export function DrilldownChart() {
   const [view, setView] = useState<DrilldownLevel>('campaign')
   const [drilldownState, setDrilldownState] = useState<DrilldownState>({ level: 'campaign', filters: { campaign: null, source: null } })
-  const { data, isLoading, error } = useCampaignDrilldown(drilldownState, view)
+  const { filters } = useFilters()
+  const filterParams = filters.selectedPeriod
+    ? { days: filters.selectedPeriod }
+    : {
+        startDate: filters.dateRange?.from ? filters.dateRange.from.toISOString().split('T')[0] : undefined,
+        endDate: filters.dateRange?.to ? filters.dateRange.to.toISOString().split('T')[0] : undefined,
+      }
+  const { data, isLoading, error } = useCampaignDrilldown(drilldownState, view, filterParams)
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(8)
   const [showAll, setShowAll] = useState(false)
   const [minLeadsFilter, setMinLeadsFilter] = useState(1)
   const [isMobile, setIsMobile] = useState(false)
-  type ChartDatum = { label: string; fullName: string; value: number; percentage: string; color: string }
   type ActivePayload = { payload: ChartDatum }
   const [lastActivePayload, setLastActivePayload] = useState<ChartDatum | null>(null)
 
@@ -177,7 +186,17 @@ export function DrilldownChart() {
             <XAxis 
               type="number"
               stroke="hsl(var(--muted-foreground))"
-              tickFormatter={(value) => isMobile ? `${Math.round(Number(value) / 1000)}k` : Number(value).toLocaleString()}
+              domain={[0, 'dataMax']}
+              tickFormatter={(value) => {
+                const v = Number(value)
+                if (!isMobile) return v.toLocaleString()
+                if (v >= 1000) {
+                  const k = v / 1000
+                  const decimals = v % 1000 === 0 ? 0 : 1
+                  return `${k.toFixed(decimals)}k`
+                }
+                return v.toLocaleString()
+              }}
             />
             <YAxis 
               dataKey="fullName"

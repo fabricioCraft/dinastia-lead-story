@@ -86,8 +86,12 @@ export class DashboardController {
     @Query('viewBy') viewBy?: string,
     @Query('campaign') campaign?: string,
     @Query('source') source?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
   ) {
-    return this.dashboardService.getCampaignDrilldown(viewBy as any, campaign, source);
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getCampaignDrilldown(viewBy as any, campaign, source, startDate, endDate, daysNumber);
   }
 
 

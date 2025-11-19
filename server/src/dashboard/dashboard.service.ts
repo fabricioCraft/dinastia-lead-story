@@ -1081,7 +1081,14 @@ export class DashboardService {
     }
   }
 
-  async getCampaignDrilldown(viewBy?: 'campaign' | 'source' | 'content', campaign?: string, source?: string): Promise<DrilldownItem[]> {
+  async getCampaignDrilldown(
+    viewBy?: 'campaign' | 'source' | 'content',
+    campaign?: string,
+    source?: string,
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+  ): Promise<DrilldownItem[]> {
     try {
       const client = this.supabaseService.getClient();
       if (!client) {
@@ -1119,6 +1126,12 @@ export class DashboardService {
           whereClauses.push(`utm_source = '${escSource}'`);
         }
       }
+      if (typeof days === 'number' && days > 0) {
+        whereClauses.push(`datacriacao >= NOW() - INTERVAL '${days} days'`);
+      } else {
+        if (startDate) whereClauses.push(`datacriacao >= '${startDate}T00:00:00.000Z'`);
+        if (endDate) whereClauses.push(`datacriacao <= '${endDate}T23:59:59.999Z'`);
+      }
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
       const sql = `
         SELECT ${groupByColumn} AS name, COUNT(chatid) AS value
@@ -1142,7 +1155,7 @@ export class DashboardService {
       while (hasMore) {
         let query: any = client
           .from('leads2')
-          .select(`${groupByColumn}`);
+          .select(`${groupByColumn}, datacriacao`);
         if (view === 'campaign') {
           if (campaign) {
             query = query.eq('utm_campaign', campaign);
@@ -1164,6 +1177,14 @@ export class DashboardService {
           if (source) {
             query = query.eq('utm_source', source);
           }
+        }
+        if (typeof days === 'number' && days > 0) {
+          const now = new Date();
+          const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+          query = query.gte('datacriacao', start.toISOString());
+        } else {
+          if (startDate) query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+          if (endDate) query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
         }
         query = query.not(groupByColumn as any, 'is', null).neq(groupByColumn as any, '');
         query = query.range(from, from + pageSize - 1);

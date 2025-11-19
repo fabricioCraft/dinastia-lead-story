@@ -1,5 +1,5 @@
 import React from 'react'
-import { Skeleton } from '@/components/ui/skeleton'
+import { BarChartSkeleton } from '@/components/charts/BarChartSkeleton'
 import { useLeadClassification } from '@/hooks/useLeadClassification'
 import { useFilters } from '@/contexts/FilterContext'
 import { format } from 'date-fns'
@@ -22,9 +22,7 @@ export function LeadClassificationChart() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-80 w-full flex items-center justify-center">
-          <Skeleton className="h-72 w-72 rounded-full" />
-        </div>
+        <BarChartSkeleton />
       </div>
     )
   }
