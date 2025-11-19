@@ -40,10 +40,12 @@ export function LeadClassificationChart() {
     )
   }
 
-  const chartData = (data || []).map(item => ({
-    name: item.classification_name,
-    value: item.lead_count
-  }))
+  const chartData = (data || [])
+    .filter(item => /^[A-Za-z]$/.test(String(item.classification_name).trim()))
+    .map(item => ({
+      name: item.classification_name,
+      value: item.lead_count
+    }))
 
   const total = chartData.reduce((sum, i) => sum + i.value, 0)
 

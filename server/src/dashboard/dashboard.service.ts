@@ -926,6 +926,7 @@ export class DashboardService {
             COUNT(*) AS lead_count
           FROM public.leads2
           WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) <> ''
+            AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]$'
         `;
         const params: string[] = [];
         if (typeof days === 'number' && days > 0) {
@@ -992,6 +993,7 @@ export class DashboardService {
       allData.forEach(item => {
         const key = String(item.classificacao_do_lead).trim();
         if (!key) return;
+        if (!/^[A-Za-z]$/.test(key)) return;
         counts.set(key, (counts.get(key) || 0) + 1);
       });
       return Array.from(counts.entries())
