@@ -12,11 +12,12 @@ export interface DrilldownItem {
   value: number
 }
 
-export function useCampaignDrilldown(state: DrilldownState) {
+export function useCampaignDrilldown(state: DrilldownState, view: DrilldownLevel) {
   return useQuery<DrilldownItem[]>({
-    queryKey: ['campaign-drilldown', state],
+    queryKey: ['campaign-drilldown', view, state],
     queryFn: async () => {
       const params = new URLSearchParams()
+      params.set('viewBy', view)
       if (state.filters.campaign) params.set('campaign', state.filters.campaign)
       if (state.filters.source) params.set('source', state.filters.source)
       const url = `/api/dashboard/campaign-drilldown${params.toString() ? `?${params.toString()}` : ''}`

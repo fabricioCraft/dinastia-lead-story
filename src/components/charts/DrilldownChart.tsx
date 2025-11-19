@@ -1,15 +1,17 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
 import { ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { useCampaignDrilldown, DrilldownState, DrilldownItem } from '@/hooks/useCampaignDrilldown'
+import { useCampaignDrilldown, DrilldownState, DrilldownItem, DrilldownLevel } from '@/hooks/useCampaignDrilldown'
 
 const COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#84CC16','#F97316','#22C55E','#EAB308']
 
 export function DrilldownChart() {
+  const [view, setView] = useState<DrilldownLevel>('campaign')
   const [drilldownState, setDrilldownState] = useState<DrilldownState>({ level: 'campaign', filters: { campaign: null, source: null } })
-  const { data, isLoading, error } = useCampaignDrilldown(drilldownState)
+  const { data, isLoading, error } = useCampaignDrilldown(drilldownState, view)
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(8)
   const [showAll, setShowAll] = useState(false)
@@ -80,9 +82,10 @@ export function DrilldownChart() {
 
   const navigateTo = (level: 'campaign' | 'source') => {
     if (level === 'campaign') {
-      setDrilldownState({ level: 'campaign', filters: { campaign: null, source: null } })
+      setDrilldownState({ level: view, filters: { campaign: null, source: null } })
     } else {
-      setDrilldownState({ level: 'source', filters: { campaign: drilldownState.filters.campaign, source: null } })
+      const next = view === 'campaign' ? 'source' : 'content'
+      setDrilldownState({ level: next, filters: { campaign: drilldownState.filters.campaign, source: null } })
     }
     setCurrentPage(0)
   }
@@ -112,8 +115,8 @@ export function DrilldownChart() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground cursor-pointer" onClick={() => navigateTo('campaign')}>Todas as Campanhas</span>
-        {drilldownState.filters.campaign && (
+        <span className="text-muted-foreground cursor-pointer" onClick={() => navigateTo('campaign')}>{view === 'campaign' ? 'Todas as Campanhas' : view === 'source' ? 'Todas as Fontes' : 'Todos os Conteúdos'}</span>
+        {view === 'campaign' && drilldownState.filters.campaign && (
           <>
             <span className="text-muted-foreground">&gt;</span>
             <span className="text-muted-foreground cursor-pointer" onClick={() => navigateTo('source')}>{drilldownState.filters.campaign}</span>
@@ -128,7 +131,18 @@ export function DrilldownChart() {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center sm:gap-4">
-        <div className="flex items-center gap-2" />
+        <div className="flex items-center gap-2">
+          <Select value={view} onValueChange={(v) => { const vv = v === 'campaign' || v === 'source' || v === 'content' ? v : 'campaign'; setView(vv); setDrilldownState({ level: vv, filters: { campaign: null, source: null } }); setCurrentPage(0) }}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Visão por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="campaign">Visão por Campanha</SelectItem>
+              <SelectItem value="source">Visão por Fonte</SelectItem>
+              <SelectItem value="content">Visão por Conteúdo</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />

@@ -1081,23 +1081,43 @@ export class DashboardService {
     }
   }
 
-  async getCampaignDrilldown(campaign?: string, source?: string): Promise<DrilldownItem[]> {
+  async getCampaignDrilldown(viewBy?: 'campaign' | 'source' | 'content', campaign?: string, source?: string): Promise<DrilldownItem[]> {
     try {
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Supabase client not initialized');
       }
-      let groupByColumn = 'utm_campaign';
+      const hierarchy: Array<'campaign' | 'source' | 'content'> = ['campaign', 'source', 'content'];
+      const view = (viewBy && hierarchy.includes(viewBy)) ? viewBy : 'campaign';
+      let groupByColumn = view === 'campaign' ? 'utm_campaign' : view === 'source' ? 'utm_source' : 'utm_content';
       const whereClauses: string[] = [];
       const escCampaign = campaign ? campaign.replace(/'/g, "''") : undefined;
       const escSource = source ? source.replace(/'/g, "''") : undefined;
-      if (escCampaign && escSource) {
+      if (view === 'campaign') {
+        if (escCampaign && escSource) {
+          groupByColumn = 'utm_content';
+          whereClauses.push(`utm_campaign = '${escCampaign}'`);
+          whereClauses.push(`utm_source = '${escSource}'`);
+        } else if (escCampaign) {
+          groupByColumn = 'utm_source';
+          whereClauses.push(`utm_campaign = '${escCampaign}'`);
+        }
+      } else if (view === 'source') {
+        if (escSource) {
+          groupByColumn = 'utm_content';
+          whereClauses.push(`utm_source = '${escSource}'`);
+        }
+        if (escCampaign) {
+          whereClauses.push(`utm_campaign = '${escCampaign}'`);
+        }
+      } else {
         groupByColumn = 'utm_content';
-        whereClauses.push(`utm_campaign = '${escCampaign}'`);
-        whereClauses.push(`utm_source = '${escSource}'`);
-      } else if (escCampaign) {
-        groupByColumn = 'utm_source';
-        whereClauses.push(`utm_campaign = '${escCampaign}'`);
+        if (escCampaign) {
+          whereClauses.push(`utm_campaign = '${escCampaign}'`);
+        }
+        if (escSource) {
+          whereClauses.push(`utm_source = '${escSource}'`);
+        }
       }
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
       const sql = `
@@ -1120,14 +1140,30 @@ export class DashboardService {
       let from = 0;
       let hasMore = true;
       while (hasMore) {
-        let query = client
+        let query: any = client
           .from('leads2')
           .select(`${groupByColumn}`);
-        if (campaign) {
-          query = query.eq('utm_campaign', campaign);
-        }
-        if (source) {
-          query = query.eq('utm_source', source);
+        if (view === 'campaign') {
+          if (campaign) {
+            query = query.eq('utm_campaign', campaign);
+          }
+          if (source) {
+            query = query.eq('utm_source', source);
+          }
+        } else if (view === 'source') {
+          if (source) {
+            query = query.eq('utm_source', source);
+          }
+          if (campaign) {
+            query = query.eq('utm_campaign', campaign);
+          }
+        } else {
+          if (campaign) {
+            query = query.eq('utm_campaign', campaign);
+          }
+          if (source) {
+            query = query.eq('utm_source', source);
+          }
         }
         query = query.not(groupByColumn as any, 'is', null).neq(groupByColumn as any, '');
         query = query.range(from, from + pageSize - 1);

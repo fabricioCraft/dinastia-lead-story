@@ -83,10 +83,11 @@ export class DashboardController {
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(3600)
   async getCampaignDrilldown(
+    @Query('viewBy') viewBy?: string,
     @Query('campaign') campaign?: string,
     @Query('source') source?: string,
   ) {
-    return this.dashboardService.getCampaignDrilldown(campaign, source);
+    return this.dashboardService.getCampaignDrilldown(viewBy as any, campaign, source);
   }
 
 
