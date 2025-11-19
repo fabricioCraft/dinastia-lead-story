@@ -15,7 +15,9 @@ export function DrilldownChart() {
   const [showAll, setShowAll] = useState(false)
   const [minLeadsFilter, setMinLeadsFilter] = useState(1)
   const [isMobile, setIsMobile] = useState(false)
-  const [lastActivePayload, setLastActivePayload] = useState<any | null>(null)
+  type ChartDatum = { label: string; fullName: string; value: number; percentage: string; color: string }
+  type ActivePayload = { payload: ChartDatum }
+  const [lastActivePayload, setLastActivePayload] = useState<ChartDatum | null>(null)
 
   useEffect(() => {
     const checkIsMobile = () => setIsMobile(window.innerWidth < 768)
@@ -45,10 +47,16 @@ export function DrilldownChart() {
   }, [data, currentPage, itemsPerPage, showAll, minLeadsFilter, isMobile])
 
   const chartHeight = showAll ? Math.max(400, processed.allData.length * 40) : 400
+  const longest = processed.allData.reduce((m, d) => Math.max(m, d.fullName.length), 0)
+  const charW = isMobile ? 7 : 8
+  const basePad = isMobile ? 24 : 40
+  const minW = isMobile ? 160 : 320
+  const maxW = isMobile ? 280 : 560
+  const yAxisWidth = Math.min(maxW, Math.max(minW, basePad + longest * charW))
 
-  const onBarClick = (payload: any) => {
+  const onBarClick = (payload: ActivePayload | null | undefined) => {
     if (!payload || !payload.payload) return
-    const name = payload.payload.fullName as string
+    const name = payload.payload.fullName
     if (drilldownState.level === 'campaign') {
       setDrilldownState({ level: 'source', filters: { campaign: name, source: null } })
       setCurrentPage(0)
@@ -58,17 +66,16 @@ export function DrilldownChart() {
     }
   }
 
-  const onChartClick = (state: any) => {
+  const onChartClick = (state: { activePayload?: Array<ActivePayload>; isTooltipActive?: boolean } | undefined) => {
     const active = state?.activePayload?.[0]?.payload || lastActivePayload
     if (active) {
       onBarClick({ payload: active })
     }
   }
 
-  const onChartMouseMove = (state: any) => {
-    if (state?.activePayload?.[0]?.payload) {
-      setLastActivePayload(state.activePayload[0].payload)
-    }
+  const onChartMouseMove = (state: { activePayload?: Array<ActivePayload> } | undefined) => {
+    const payload = state?.activePayload?.[0]?.payload
+    if (payload) setLastActivePayload(payload)
   }
 
   const navigateTo = (level: 'campaign' | 'source') => {
@@ -151,7 +158,7 @@ export function DrilldownChart() {
 
       <div style={{ height: showAll ? chartHeight : 400, cursor: isClickable ? 'pointer' : 'default' }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 140, bottom: 20 }} onClick={onChartClick} onMouseMove={onChartMouseMove} onMouseLeave={() => setLastActivePayload(null)} style={{ cursor: isClickable ? 'pointer' : 'default' }}>
+          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 24, bottom: 20 }} onClick={onChartClick} onMouseMove={onChartMouseMove} onMouseLeave={() => setLastActivePayload(null)} style={{ cursor: isClickable ? 'pointer' : 'default' }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis 
               type="number"
@@ -159,11 +166,11 @@ export function DrilldownChart() {
               tickFormatter={(value) => isMobile ? `${Math.round(Number(value) / 1000)}k` : Number(value).toLocaleString()}
             />
             <YAxis 
-              dataKey="label"
+              dataKey="fullName"
               type="category"
               stroke="hsl(var(--muted-foreground))"
-              width={isMobile ? 70 : 130}
-              tick={{ fontSize: isMobile ? 10 : 11 }}
+              width={yAxisWidth}
+              tick={{ fontSize: isMobile ? 11 : 12 }}
               interval={0}
             />
             <Tooltip content={<CustomDrilldownTooltip levelLabel={levelLabel} />} cursor={{ fill: 'rgba(255,255,255,0.25)' }} />
@@ -244,7 +251,8 @@ export function DrilldownChart() {
   )
 }
 
-function CustomDrilldownTooltip({ active, payload, label, levelLabel }: any) {
+function CustomDrilldownTooltip(props: { active?: boolean; payload?: Array<{ value: number; payload: ChartDatum }>; label?: string; levelLabel: string }) {
+  const { active, payload, label, levelLabel } = props
   if (!active || !payload || !payload.length) return null
   const p = payload[0]
   const value = Number(p.value || 0)
