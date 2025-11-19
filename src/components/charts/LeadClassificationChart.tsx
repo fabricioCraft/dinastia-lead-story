@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLeadClassification } from '@/hooks/useLeadClassification'
 import { useFilters } from '@/contexts/FilterContext'
 import { format } from 'date-fns'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const COLORS = [
   '#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#84CC16','#F97316','#22C55E','#EAB308'
@@ -40,27 +40,36 @@ export function LeadClassificationChart() {
     )
   }
 
-  const chartData = (data || [])
+  const baseData = (data || [])
     .filter(item => /^[A-Za-z]$/.test(String(item.classification_name).trim()))
     .map(item => ({
       name: item.classification_name,
       value: item.lead_count
     }))
 
-  const total = chartData.reduce((sum, i) => sum + i.value, 0)
+  const total = baseData.reduce((sum, i) => sum + i.value, 0)
+  const chartData = baseData.map(i => ({
+    ...i,
+    percentage: total > 0 ? Number(((i.value / total) * 100).toFixed(1)) : 0
+  }))
 
   return (
     <div>
       <div className="h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={120} innerRadius={60}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
+            <YAxis yAxisId="left" tickLine={false} axisLine={false} allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
+            <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
+            <Tooltip content={<CustomClassificationTooltip total={total} />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }} />
+            <Bar yAxisId="left" dataKey="value" radius={[6, 6, 0, 0]}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
-            </Pie>
-            <Tooltip content={<CustomClassificationTooltip total={total} />} />
-          </PieChart>
+            </Bar>
+            <Line yAxisId="right" type="monotone" dataKey="percentage" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       <div className="flex justify-between items-center mt-4 text-xs text-muted-foreground">
@@ -75,7 +84,7 @@ function CustomClassificationTooltip({ active, payload, label, total }: any) {
   if (!active || !payload || !payload.length) return null
   const value = Number(payload[0].value || 0)
   const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0'
-  const titleLabel = (payload[0]?.name ?? payload[0]?.payload?.name ?? label ?? '').toString()
+  const titleLabel = (payload[0]?.payload?.name ?? label ?? '').toString()
   return (
     <div style={{
       backgroundColor: 'hsl(var(--background))',
@@ -84,7 +93,7 @@ function CustomClassificationTooltip({ active, payload, label, total }: any) {
       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
       padding: '8px 10px'
     }}>
-      <div style={{ color: '#FFFFFF', fontWeight: 700 }}>{`Perfil: ${titleLabel}`}</div>
+      <div style={{ color: 'hsl(var(--foreground))', fontWeight: 700 }}>{`Perfil: ${titleLabel}`}</div>
       <div style={{ color: '#3B82F6', marginTop: 4 }}>{`Total : ${value.toLocaleString()} leads (${percentage}%)`}</div>
     </div>
   )
