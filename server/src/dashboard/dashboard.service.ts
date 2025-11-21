@@ -614,7 +614,9 @@ export class DashboardService {
 
       return Array.from(counts.entries())
         .map(([key, appointment_count]) => {
-          const [day, agendado_por] = key.split('|');
+          const sep = key.indexOf('|');
+          const day = sep >= 0 ? key.slice(0, sep) : key;
+          const agendado_por = sep >= 0 ? key.slice(sep + 1) : '';
           return { day, agendado_por, appointment_count };
         })
         .sort((a, b) => a.day.localeCompare(b.day) || b.appointment_count - a.appointment_count);

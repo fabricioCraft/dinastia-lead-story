@@ -93,11 +93,50 @@ export function AppointmentsByPersonChart() {
   }, [data])
 
   const colors = useMemo(() => {
-    const n = teamMembers.length || 1
-    return Array.from({ length: n }).map((_, i) => {
-      const hue = (i * 137.508) % 360
-      return `hsl(${Math.round(hue)}, 70%, 50%)`
+    const IA_COLOR = 'hsl(var(--chart-2))'
+    const GREEN = '#22C55E'
+    const DISTINCT_COLORS = [
+      '#8B5CF6',
+      '#F59E0B',
+      '#EF4444',
+      '#EC4899',
+      '#06B6D4',
+      '#A855F7',
+      '#F97316',
+      '#6366F1',
+      '#FB7185',
+      '#0EA5E9',
+    ]
+    const used = new Set<string>()
+    let greenAssigned = false
+    const result: string[] = []
+    let colorIndex = 0
+    teamMembers.forEach(member => {
+      const code = member.split('|')[0]?.toLowerCase() || member.toLowerCase()
+      let color: string | null = null
+      if (code === 'ia') {
+        color = IA_COLOR
+      } else if (member.toLowerCase().includes('oferta-hormozi')) {
+        color = '#F97316'
+      } else if (!greenAssigned) {
+        color = GREEN
+        greenAssigned = true
+      } else {
+        while (colorIndex < DISTINCT_COLORS.length && used.has(DISTINCT_COLORS[colorIndex])) {
+          colorIndex++
+        }
+        color = DISTINCT_COLORS[colorIndex] || `hsl(${Math.round((colorIndex * 47) % 360)}, 70%, 55%)`
+        colorIndex++
+      }
+      if (used.has(color)) {
+        const alt = DISTINCT_COLORS.find(c => !used.has(c)) || `hsl(${Math.round((colorIndex * 53) % 360)}, 70%, 55%)`
+        color = alt
+        colorIndex++
+      }
+      used.add(color)
+      result.push(color)
     })
+    return result
   }, [teamMembers])
 
   const startDate = filters.dateRange?.from
