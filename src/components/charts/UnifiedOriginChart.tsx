@@ -198,6 +198,7 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
                 boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                 fontSize: isMobile ? '12px' : '14px'
               }}
+              cursor={{ fill: 'hsl(var(--muted))', opacity: 0.12 }}
             />
             <Bar 
               dataKey="leads" 
