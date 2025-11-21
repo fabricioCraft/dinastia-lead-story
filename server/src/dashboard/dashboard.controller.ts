@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseInterceptors } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { DashboardService, UnifiedOriginSummaryData } from './dashboard.service';
+import { CampaignSummaryCacheInterceptor } from './campaign-summary-cache.interceptor';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -41,6 +42,28 @@ export class DashboardController {
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
     return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber);
+  }
+
+  @Get('appointments-by-person')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getAppointmentsByPerson(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getAppointmentsByPerson(startDate, endDate, daysNumber);
+  }
+
+  @Get('appointments-by-person-per-day')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getAppointmentsByPersonPerDay(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getAppointmentsByPersonPerDay(startDate, endDate, daysNumber);
   }
 
   

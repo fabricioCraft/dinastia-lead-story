@@ -20,7 +20,7 @@ import { DashboardPersistenceService } from './services/dashboard-persistence.se
       // A pasta 'client' conterá nosso build do React
       rootPath: join(__dirname, '..', 'client'),
       // Garante que rotas desconhecidas pela API retornem o index.html (para o React Router funcionar)
-      exclude: ['/api*'],
+      exclude: ['/api(.*)'],
     }),
     FunnelModule,
     DashboardModule

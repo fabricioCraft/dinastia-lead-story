@@ -5,10 +5,11 @@ import { DashboardService } from './dashboard.service';
 import { DashboardController } from './dashboard.controller';
 import { SupabaseService } from '../services/supabase.service';
 import { DashboardPersistenceService } from '../services/dashboard-persistence.service';
+import { CampaignSummaryCacheInterceptor } from './campaign-summary-cache.interceptor';
 
 @Module({
   imports: [CacheModule.register()],
   controllers: [DashboardController],
-  providers: [DashboardService, SupabaseService, DashboardPersistenceService],
+  providers: [DashboardService, SupabaseService, DashboardPersistenceService, CampaignSummaryCacheInterceptor],
 })
 export class DashboardModule {}

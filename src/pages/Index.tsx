@@ -6,6 +6,7 @@ import { DrilldownChart } from "@/components/charts/DrilldownChart";
 
 import { DailyLeadVolumeChart } from "@/components/charts/DailyLeadVolumeChart";
 import { DailyAppointmentsChart } from "@/components/charts/DailyAppointmentsChart";
+import { AppointmentsByPersonChart } from "@/components/charts/AppointmentsByPersonChart";
 
 import { SchedulingSummaryCards } from "@/components/SchedulingSummaryCards";
 import { Card } from "@/components/ui/card";
@@ -84,8 +85,17 @@ const Index = () => {
               {/* Cards de KPI de Agendamentos */}
               <SchedulingSummaryCards />
               
-              {/* Gráfico de Volume Diário de Agendamentos */}
-              <DailyAppointmentsChart />
+              {/* Análise de Agendamentos */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="p-6 card-glow border-border/50">
+                  <h3 className="text-lg font-semibold mb-2">Volume Diário de Agendamentos</h3>
+                  <DailyAppointmentsChart />
+                </Card>
+                <Card className="p-6 card-glow border-border/50">
+                  <h3 className="text-lg font-semibold mb-2">Agendamentos por Pessoa</h3>
+                  <AppointmentsByPersonChart />
+                </Card>
+              </div>
             </div>
           </section>
 

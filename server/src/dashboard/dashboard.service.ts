@@ -35,6 +35,17 @@ export interface DailyAppointmentsData {
   appointments_per_day: number;
 }
 
+export interface AppointmentsByPersonData {
+  agendado_por: string;
+  appointment_count: number;
+}
+
+export interface AppointmentsByPersonPerDayData {
+  day: string;
+  agendado_por: string;
+  appointment_count: number;
+}
+
 export interface LeadsByStageData {
   stage_name: string;
   lead_count: number;
@@ -61,7 +72,7 @@ export class DashboardService {
 
   constructor(
     private readonly supabaseService: SupabaseService
-  ) {}
+  ) { }
 
   async getOriginSummary(days?: number) {
     // Usar dados diretamente da tabela leads2 do Supabase
@@ -461,7 +472,7 @@ export class DashboardService {
       `;
 
       this.logger.log(`Executando query de agendamentos diários: ${query}`);
-      
+
 
       const { data, error } = await client.rpc('execute_sql', {
         query: query
@@ -494,6 +505,122 @@ export class DashboardService {
       this.logger.error('Erro ao buscar agendamentos diários:', error);
       // Em caso de erro, tentar fallback
       return await this.getDailyAppointmentsFallback(startDate, endDate);
+    }
+  }
+
+  async getAppointmentsByPerson(
+    startDate?: string,
+    endDate?: string,
+    days?: number
+  ): Promise<AppointmentsByPersonPerDayData[]> {
+    return this.getAppointmentsByPersonPerDay(startDate, endDate, days);
+  }
+
+  async getAppointmentsByPersonPerDay(
+    startDate?: string,
+    endDate?: string,
+    days?: number
+  ): Promise<AppointmentsByPersonPerDayData[]> {
+    try {
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      let sql = `
+        SELECT 
+          DATE_TRUNC('day', to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS'))::date AS day,
+          agendado_por,
+          COUNT(chatid) AS appointment_count
+        FROM public.leads2
+        WHERE agendado_por IS NOT NULL AND TRIM(agendado_por) <> ''
+          AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''
+      `;
+
+      if (typeof days === 'number' && days > 0) {
+        sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') >= NOW() - INTERVAL '${days} days'`;
+      } else {
+        if (startDate) {
+          sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') >= '${startDate}T00:00:00.000Z'`;
+        }
+        if (endDate) {
+          sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') <= '${endDate}T23:59:59.999Z'`;
+        }
+      }
+
+      sql += `
+        GROUP BY day, agendado_por
+        ORDER BY day ASC, appointment_count DESC
+      `;
+
+      try {
+        const { data, error } = await client.rpc('execute_sql', { query: sql });
+        if (!error && data) {
+          return (data || []).map((row: any) => ({
+            day: row.day,
+            agendado_por: row.agendado_por,
+            appointment_count: parseInt(row.appointment_count, 10)
+          }));
+        }
+      } catch (_) { }
+
+      const allData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        let query = client
+          .from('leads2')
+          .select('agendado_por, data_do_agendamento, chatid')
+          .not('agendado_por', 'is', null)
+          .neq('agendado_por', '')
+          .not('data_do_agendamento', 'is', null)
+          .neq('data_do_agendamento', '');
+        query = query.range(from, from + pageSize - 1);
+        const { data, error } = await query;
+        if (error) {
+          throw new Error(error.message);
+        }
+        if (data && data.length > 0) {
+          allData.push(...data);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const now = new Date();
+      const startTs = typeof days === 'number' && days > 0
+        ? new Date(now.getTime() - days * 24 * 60 * 60 * 1000).getTime()
+        : startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : undefined;
+      const endTs = typeof days === 'number' && days > 0
+        ? now.getTime()
+        : endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : undefined;
+
+      const counts = new Map<string, number>();
+      allData.forEach((row) => {
+        const person = String(row.agendado_por).trim();
+        if (!person) return;
+        const dt = this.parseBrazilianDateTime(String(row.data_do_agendamento));
+        if (!dt || isNaN(dt.getTime())) return;
+        const t = dt.getTime();
+        if (startTs && t < startTs) return;
+        if (endTs && t > endTs) return;
+        const dayKey = dt.toISOString().split('T')[0];
+        const key = `${dayKey}|${person}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+
+      return Array.from(counts.entries())
+        .map(([key, appointment_count]) => {
+          const [day, agendado_por] = key.split('|');
+          return { day, agendado_por, appointment_count };
+        })
+        .sort((a, b) => a.day.localeCompare(b.day) || b.appointment_count - a.appointment_count);
+    } catch (error) {
+      this.logger.error('Erro ao buscar agendamentos por pessoa por dia:', error);
+      throw error;
     }
   }
 
@@ -570,7 +697,7 @@ export class DashboardService {
           invalidDatesCount++;
         }
       });
-      
+
       this.logger.log(`Fallback processou ${validDatesCount} datas válidas e ignorou ${invalidDatesCount} datas inválidas`);
 
       // Converter para array e ordenar
@@ -635,7 +762,7 @@ export class DashboardService {
       for (let date = new Date(effectiveStartDate); date <= effectiveEndDate; date.setDate(date.getDate() + 1)) {
         const dayStr = date.toISOString().split('T')[0]; // Formato YYYY-MM-DD
         const appointments = dataMap.get(dayStr) || 0;
-        
+
         result.push({
           day: dayStr,
           appointments_per_day: appointments
@@ -659,19 +786,19 @@ export class DashboardService {
       if (brFormatMatch) {
         const [, day, month, year] = brFormatMatch;
         const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        
+
         // Verificar se a data é válida
         if (!isNaN(date.getTime())) {
           return date.toISOString().split('T')[0]; // Formato YYYY-MM-DD
         }
       }
-      
+
       // Se não conseguiu processar no formato brasileiro, tentar outros formatos
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
         return date.toISOString().split('T')[0];
       }
-      
+
       return null;
     } catch (error) {
       return null;
@@ -697,7 +824,7 @@ export class DashboardService {
   async getUnifiedOriginSummary(days?: number, fromDate?: Date, toDate?: Date): Promise<UnifiedOriginSummaryData[]> {
     try {
       this.logger.log('Buscando dados de origem dos leads exclusivamente da tabela leads2...');
-      
+
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Supabase client not initialized');
@@ -769,8 +896,8 @@ export class DashboardService {
             lead_count DESC;
         `;
 
-        const { data: sqlResult, error: sqlError } = await client.rpc('execute_sql', { 
-          query: sqlQuery 
+        const { data: sqlResult, error: sqlError } = await client.rpc('execute_sql', {
+          query: sqlQuery
         });
 
         if (!sqlError && sqlResult && Array.isArray(sqlResult)) {
@@ -788,7 +915,7 @@ export class DashboardService {
 
       // Fallback manual: buscar dados e processar em JavaScript
       this.logger.log('Executando fallback manual para buscar dados de origem...');
-      
+
       const allData: any[] = [];
       let from = 0;
       const pageSize = 1000;
@@ -821,9 +948,9 @@ export class DashboardService {
       // Função para normalizar nomes de origem (mantendo a mesma lógica da query SQL)
       const normalizeOrigin = (origin: string | null | undefined): string => {
         if (!origin || origin.trim() === '') return 'Sem Origem';
-        
+
         const normalized = origin.toLowerCase().trim();
-        
+
         if (normalized.includes('isca') && normalized.includes('scopeline')) {
           return 'Isca Scopeline';
         }
@@ -884,13 +1011,13 @@ export class DashboardService {
         if (normalized.includes('dinastia')) {
           return origin.trim();
         }
-        
+
         return 'Outros';
       };
 
       // Processar dados e agrupar por origem normalizada
       const originCounts = new Map<string, number>();
-      
+
       allData.forEach(lead => {
         const normalizedOrigin = normalizeOrigin(lead.origem);
         originCounts.set(normalizedOrigin, (originCounts.get(normalizedOrigin) || 0) + 1);
@@ -931,7 +1058,7 @@ export class DashboardService {
             COUNT(*) AS lead_count
           FROM public.leads2
           WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) <> ''
-            AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]$'
+            AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]+$'
         `;
         const params: string[] = [];
         if (typeof days === 'number' && days > 0) {
@@ -955,7 +1082,7 @@ export class DashboardService {
             lead_count: parseInt(row.lead_count, 10)
           }));
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const allData: any[] = [];
       let from = 0;
@@ -998,7 +1125,7 @@ export class DashboardService {
       allData.forEach(item => {
         const key = String(item.classificacao_do_lead).trim();
         if (!key) return;
-        if (!/^[A-Za-z]$/.test(key)) return;
+        if (!/^[A-Za-z]+$/.test(key)) return;
         counts.set(key, (counts.get(key) || 0) + 1);
       });
       return Array.from(counts.entries())
@@ -1012,12 +1139,12 @@ export class DashboardService {
   async getDashboardLeadsByStage(): Promise<LeadsByStageData[]> {
     try {
       this.logger.log('Buscando distribuição de leads por etapa...');
-      
+
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
-      
+
       // Executar a query SQL especificada pelo usuário
       const { data, error } = await client
         .from('leads2')
@@ -1034,22 +1161,22 @@ export class DashboardService {
       // Função para normalizar nomes de etapas similares
       const normalizeStage = (stage: string): string => {
         const lowerStage = stage.toLowerCase().trim();
-        
+
         // Consolidar variações de "no-show"
         if (lowerStage === 'noshow' || lowerStage === 'no_show' || lowerStage === 'no show') {
           return 'No-show';
         }
-        
+
         // Consolidar variações de "agendado"
         if (lowerStage === 'agendado' || lowerStage === 'agendados') {
           return 'Agendado';
         }
-        
+
         // Consolidar variações de "follow up"
         if (lowerStage === 'follow_up' || lowerStage === 'follow up' || lowerStage === 'followup') {
           return 'Follow-up';
         }
-        
+
         // Capitalizar primeira letra de cada palavra para outras etapas
         return stage
           .split(' ')
@@ -1146,7 +1273,7 @@ export class DashboardService {
         if (!error && Array.isArray(data)) {
           return (data || []).map((row: any) => ({ name: row.name, value: parseInt(row.value, 10) }));
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const counts = new Map<string, number>();
       const pageSize = 2000;

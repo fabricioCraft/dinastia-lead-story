@@ -1,5 +1,6 @@
 import { DashboardService } from './dashboard.service';
 import { SupabaseService } from '../services/supabase.service';
+import type { AppointmentsByPersonData } from './dashboard.service';
 
 // Mocks
 const mockSupabaseService = {
@@ -491,5 +492,48 @@ describe('DashboardService.getUnifiedOriginSummary', () => {
     const service = new DashboardService(mockSupabaseServiceForOrigin);
 
     await expect(service.getUnifiedOriginSummary()).rejects.toThrow();
+  });
+});
+
+describe('DashboardService.getAppointmentsByPerson', () => {
+  it('should return array ordered by appointment_count desc', async () => {
+    const mockClient = {
+      rpc: jest.fn().mockResolvedValue({
+        data: [
+          { day: '2025-10-15', agendado_por: 'Alice', appointment_count: '10' },
+          { day: '2025-10-15', agendado_por: 'Bob', appointment_count: '7' },
+          { day: '2025-10-15', agendado_por: 'Carol', appointment_count: '3' },
+        ],
+        error: null,
+      })
+    };
+    const mockSupabase = { getClient: jest.fn().mockReturnValue(mockClient) } as unknown as SupabaseService;
+    const service = new DashboardService(mockSupabase);
+    const result = await service.getAppointmentsByPerson('2025-10-01', '2025-10-31');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[0].agendado_por).toBe('Alice');
+    expect(result[0].appointment_count).toBe(10);
+    for (let i = 1; i < result.length; i++) {
+      expect(result[i - 1].appointment_count).toBeGreaterThanOrEqual(result[i].appointment_count);
+    }
+  });
+
+  it('should handle empty data', async () => {
+    const mockClient = {
+      rpc: jest.fn().mockResolvedValue({ data: [], error: null })
+    };
+    const mockSupabase = { getClient: jest.fn().mockReturnValue(mockClient) } as unknown as SupabaseService;
+    const service = new DashboardService(mockSupabase);
+    const result = await service.getAppointmentsByPerson('2025-10-01', '2025-10-31');
+    expect(result.length).toBe(0);
+  });
+
+  it('should throw on rpc error', async () => {
+    const mockClient = {
+      rpc: jest.fn().mockResolvedValue({ data: null, error: { message: 'rpc error' } })
+    };
+    const mockSupabase = { getClient: jest.fn().mockReturnValue(mockClient) } as unknown as SupabaseService;
+    const service = new DashboardService(mockSupabase);
+    await expect(service.getAppointmentsByPerson('2025-10-01', '2025-10-31')).rejects.toThrow('rpc error');
   });
 });
