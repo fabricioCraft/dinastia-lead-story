@@ -24,7 +24,7 @@ export function useTimeInStage(customFilters?: FilterParams) {
   };
 
   return useQuery<TimeInStageItem[]>({
-    queryKey: ["funnel", "time-in-stage", activeFilters],
+    queryKey: ["funnel", "time-in-stage", activeFilters, filters.categoricalFilters],
     queryFn: async () => {
       const params = new URLSearchParams();
       
@@ -38,6 +38,11 @@ export function useTimeInStage(customFilters?: FilterParams) {
       }
       
 
+      const cf = filters.categoricalFilters || {};
+      if (cf.campaign) params.append('campaign', cf.campaign);
+      if (cf.source) params.append('source', cf.source);
+      if (cf.content) params.append('content', cf.content);
+      if (cf.classification) params.append('classification', cf.classification);
       
       const url = `/api/funnel/time-in-stage${params.toString() ? `?${params.toString()}` : ''}`;
       

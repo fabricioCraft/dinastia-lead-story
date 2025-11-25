@@ -16,7 +16,7 @@ export function useUnifiedOriginSummary() {
   const { filters } = useFilters();
 
   return useQuery<UnifiedOriginSummaryData[]>({
-    queryKey: ['unified-origin-summary', filters.selectedPeriod, filters.dateRange],
+    queryKey: ['unified-origin-summary', filters.selectedPeriod, filters.dateRange, filters.categoricalFilters],
     queryFn: async () => {
       const params = new URLSearchParams();
       
@@ -27,6 +27,12 @@ export function useUnifiedOriginSummary() {
         params.append('from', filters.dateRange.from.toISOString());
         params.append('to', filters.dateRange.to.toISOString());
       }
+
+      const cf = filters.categoricalFilters || {};
+      if (cf.campaign) params.append('campaign', cf.campaign);
+      if (cf.source) params.append('source', cf.source);
+      if (cf.content) params.append('content', cf.content);
+      if (cf.classification) params.append('classification', cf.classification);
 
       const url = `/api/dashboard/unified-origin-summary${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);

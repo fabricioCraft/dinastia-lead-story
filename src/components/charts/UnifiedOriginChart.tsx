@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Filter, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useFilters } from '@/contexts/FilterContext';
 
 interface UnifiedOriginChartProps {
   threshold?: number;
@@ -16,6 +17,7 @@ interface UnifiedOriginChartProps {
  */
 export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) {
   const { data, isLoading, error } = useUnifiedOriginSummary();
+  const { setCategoricalFilter } = useFilters();
   const [currentPage, setCurrentPage] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(8);
   const [showAll, setShowAll] = useState(false);
@@ -181,7 +183,7 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
               tick={{ fontSize: chartConfig.fontSize }}
               interval={0}
             />
-            <Tooltip 
+          <Tooltip 
               formatter={(value: number, name, props) => [
                 `${value.toLocaleString()} leads (${props.payload.percentage}%)`,
                 'Total'
@@ -204,6 +206,10 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
               dataKey="leads" 
               radius={[0, 4, 4, 0]}
               fill="#3B82F6"
+              onClick={(props) => {
+                const origem = (props as any)?.payload?.origemCompleta;
+                if (origem) setCategoricalFilter('source', origem);
+              }}
             />
           </BarChart>
         </ResponsiveContainer>

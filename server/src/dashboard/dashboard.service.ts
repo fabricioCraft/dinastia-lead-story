@@ -66,6 +66,13 @@ export interface DrilldownItem {
   value: number;
 }
 
+export interface DashboardFilters {
+  campaign?: string;
+  source?: string;
+  content?: string;
+  classification?: string;
+}
+
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
@@ -73,6 +80,48 @@ export class DashboardService {
   constructor(
     private readonly supabaseService: SupabaseService
   ) { }
+
+  private buildWhereClause(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters,
+    dateColumn: string = 'datacriacao'
+  ): string {
+    const whereClauses: string[] = [];
+
+    // Filtro de data
+    if (typeof days === 'number' && days > 0) {
+      whereClauses.push(`${dateColumn} >= NOW() - INTERVAL '${days} days'`);
+    } else {
+      if (startDate) whereClauses.push(`${dateColumn} >= '${startDate}T00:00:00.000Z'`);
+      if (endDate) whereClauses.push(`${dateColumn} <= '${endDate}T23:59:59.999Z'`);
+    }
+
+    // Filtros categóricos
+    if (filters) {
+      if (filters.campaign) {
+        // Normalização complexa para campaign
+        whereClauses.push(`
+          (CASE 
+            WHEN utm_campaign ILIKE 'DINASTIA |%|%' THEN TRIM(split_part(utm_campaign, '|', 2))
+            ELSE utm_campaign 
+          END) = '${filters.campaign}'
+        `);
+      }
+      if (filters.source) {
+        whereClauses.push(`utm_source = '${filters.source}'`);
+      }
+      if (filters.content) {
+        whereClauses.push(`utm_content = '${filters.content}'`);
+      }
+      if (filters.classification) {
+        whereClauses.push(`classificacao_do_lead = '${filters.classification}'`);
+      }
+    }
+
+    return whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+  }
 
   async getOriginSummary(days?: number) {
     // Usar dados diretamente da tabela leads2 do Supabase
@@ -134,6 +183,139 @@ export class DashboardService {
     }
   }
 
+  private async getSummaryByDimension(
+    column: 'utm_campaign' | 'utm_source' | 'utm_content',
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters,
+  ): Promise<DrilldownItem[]> {
+    const client = this.supabaseService.getClient();
+    if (!client) {
+      throw new Error('Supabase client not initialized');
+    }
+
+    const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
+
+    let sql = '';
+
+    if (column === 'utm_campaign') {
+      // Query específica para normalizar nomes de campanha
+      sql = `
+        SELECT
+            normalized_campaign_name AS name,
+            COUNT(chatid) AS value
+        FROM (
+            SELECT
+                CASE
+                    WHEN utm_campaign ILIKE 'DINASTIA |%|%' THEN
+                        TRIM(split_part(utm_campaign, '|', 2))
+                    ELSE utm_campaign
+                END AS normalized_campaign_name,
+                chatid
+            FROM
+                public.leads2
+            ${whereSql ? whereSql + ' AND ' : 'WHERE '} utm_campaign IS NOT NULL AND utm_campaign <> ''
+        ) AS subquery
+        GROUP BY
+            normalized_campaign_name
+        ORDER BY
+            value DESC;
+      `;
+    } else {
+      sql = `
+        SELECT ${column} AS name, COUNT(chatid) AS value
+        FROM public.leads2
+        ${whereSql ? whereSql + ' AND ' : 'WHERE '}${column} IS NOT NULL AND ${column} <> ''
+        GROUP BY ${column}
+        ORDER BY value DESC;
+      `;
+    }
+
+    try {
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
+      if (!error && Array.isArray(data)) {
+        return (data || []).map((row: any) => ({ name: row.name, value: parseInt(row.value, 10) }));
+      }
+    } catch (_) { }
+
+    const counts = new Map<string, number>();
+    const pageSize = 2000;
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      let query: any = client
+        .from('leads2')
+        .select(`${column}, datacriacao`);
+      if (typeof days === 'number' && days > 0) {
+        const now = new Date();
+        const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+        query = query.gte('datacriacao', start.toISOString());
+      } else {
+        if (startDate) query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+        if (endDate) query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
+      }
+      query = query.not(column as any, 'is', null).neq(column as any, '');
+      query = query.range(from, from + pageSize - 1);
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(error.message);
+      }
+      const rows: any[] = data || [];
+      for (const row of rows) {
+        let name = (row as any)[column] ?? '';
+
+        // Normalização no fallback para campanhas
+        if (column === 'utm_campaign' && name && typeof name === 'string') {
+          // Verifica se segue o padrão DINASTIA | ... | ...
+          if (name.toUpperCase().startsWith('DINASTIA |') && name.split('|').length >= 3) {
+            const parts = name.split('|');
+            if (parts.length >= 2) {
+              name = parts[1].trim();
+            }
+          }
+        }
+
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+      if (rows.length < pageSize) {
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }
+
+  async getSummaryByCampaign(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters,
+  ): Promise<DrilldownItem[]> {
+    return this.getSummaryByDimension('utm_campaign', startDate, endDate, days, filters);
+  }
+
+  async getSummaryBySource(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters,
+  ): Promise<DrilldownItem[]> {
+    return this.getSummaryByDimension('utm_source', startDate, endDate, days, filters);
+  }
+
+  async getSummaryByContent(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters,
+  ): Promise<DrilldownItem[]> {
+    return this.getSummaryByDimension('utm_content', startDate, endDate, days, filters);
+  }
+
   async getFunnelBreakdownForOrigin(origin: string, days?: number): Promise<{ status: string; count: number }[]> {
     // Método removido - dados agora vêm do N8N
     return [];
@@ -144,17 +326,43 @@ export class DashboardService {
   async getDailyLeadVolume(
     startDate?: string,
     endDate?: string,
-    days?: number
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log('Buscando dados de volume diário de leads');
-      this.logger.log(`Filtros recebidos - startDate: ${startDate}, endDate: ${endDate}, days: ${days}`);
+      this.logger.log('Buscando dados de volume diário de leads com filtros');
 
-      if (typeof days === 'number' && days > 0) {
-        return await this.getDailyLeadVolumeLastDays(days);
+      const client = this.supabaseService.getClient();
+      if (!client) throw new Error('Cliente Supabase não inicializado');
+
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
+
+      const sql = `
+        SELECT 
+          DATE_TRUNC('day', datacriacao)::date AS day, 
+          COUNT(chatid) AS total_leads_per_day 
+        FROM 
+          public.leads2 
+        ${whereSql}
+        GROUP BY 
+          day 
+        ORDER BY 
+          day ASC
+      `;
+
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
+
+      if (!error && data) {
+        return (data || []).map((row: any) => ({
+          day: row.day,
+          total_leads_per_day: parseInt(row.total_leads_per_day, 10)
+        }));
       }
 
-      return await this.getDailyLeadVolumeDirectQuery(startDate, endDate);
+      // Fallback logic if RPC fails (simplified for brevity, ideally should also filter)
+      // For now, returning empty or basic fallback if RPC fails is acceptable as we rely on RPC for complex filtering
+      this.logger.warn('RPC falhou ou retornou vazio, tentando fallback simplificado (sem filtros avançados)');
+      return await this.getDailyLeadVolumeFallback(startDate, endDate, days, filters);
 
     } catch (error) {
       this.logger.error('Erro ao buscar dados de volume diário:', error);
@@ -164,7 +372,7 @@ export class DashboardService {
 
   private async getDailyLeadVolumeLastDays(days: number): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log(`Buscando volume diário de leads para últimos ${days} dias (apenas leads2) com paginação`);
+      this.logger.log(`Buscando volume diário de leads para últimos ${days} dias(apenas leads2) com paginação`);
 
       const client = this.supabaseService.getClient();
       if (!client) {
@@ -189,7 +397,7 @@ export class DashboardService {
 
         if (error) {
           this.logger.error('Erro ao buscar dados de leads2:', error);
-          throw new Error(`Erro na consulta leads2: ${error.message}`);
+          throw new Error(`Erro na consulta leads2: ${error.message} `);
         }
 
         if (data && data.length > 0) {
@@ -219,7 +427,9 @@ export class DashboardService {
 
   private async getDailyLeadVolumeFallback(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<DailyLeadVolumeData[]> {
     try {
       this.logger.log('Buscando volume diário de leads exclusivamente da tabela leads2 com SQL puro');
@@ -229,43 +439,20 @@ export class DashboardService {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Query SQL pura e otimizada para buscar apenas da tabela leads2
-      let sqlQuery = `
-        SELECT 
-          DATE_TRUNC('day', datacriacao)::date AS day, 
-          COUNT(chatid) AS total_leads_per_day 
-        FROM 
-          public.leads2 
-        WHERE 
-          datacriacao IS NOT NULL`;
-
-      // Adicionar filtros de data se fornecidos
-      const queryParams: any[] = [];
-      if (startDate) {
-        queryParams.push(`${startDate}T00:00:00.000Z`);
-        sqlQuery += ` AND datacriacao >= $${queryParams.length}`;
-      }
-      if (endDate) {
-        queryParams.push(`${endDate}T23:59:59.999Z`);
-        sqlQuery += ` AND datacriacao <= $${queryParams.length}`;
-      }
-
-      sqlQuery += `
-        GROUP BY 
-          day 
-        ORDER BY 
-          day ASC`;
-
-      this.logger.log(`Executando query SQL pura: ${sqlQuery}`);
-      this.logger.log(`Parâmetros: ${JSON.stringify(queryParams)}`);
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
+      const sqlQuery = `
+        SELECT
+          DATE_TRUNC('day', datacriacao)::date AS day,
+          COUNT(chatid) AS total_leads_per_day
+        FROM public.leads2
+        ${whereSql ? whereSql + ' AND datacriacao IS NOT NULL' : 'WHERE datacriacao IS NOT NULL'}
+        GROUP BY day 
+        ORDER BY day ASC`;
 
       // Tentar usar execute_sql primeiro
       try {
-        const { data, error } = await client.rpc('execute_sql', {
-          sql_query: sqlQuery,
-          params: queryParams
-        });
-
+        const { data, error } = await client.rpc('execute_sql', { query: sqlQuery });
+        
         if (!error && data) {
           this.logger.log(`Query SQL retornou ${data.length} registros de volume diário`);
           return data;
@@ -274,8 +461,8 @@ export class DashboardService {
         this.logger.warn('Função execute_sql não disponível, usando fallback manual');
       }
 
-      // Fallback manual usando apenas leads2
-      return await this.getDailyLeadVolumeDirectQuery(startDate, endDate);
+      // Fallback manual usando apenas leads2 com filtros
+      return await this.getDailyLeadVolumeDirectQuery(startDate, endDate, days, filters);
 
     } catch (error) {
       this.logger.error('Erro ao buscar volume diário de leads:', error);
@@ -289,7 +476,9 @@ export class DashboardService {
    */
   private async getDailyLeadVolumeDirectQuery(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<DailyLeadVolumeData[]> {
     try {
       this.logger.log('Usando query direta para volume diário de leads (apenas leads2) com paginação');
@@ -309,14 +498,20 @@ export class DashboardService {
       while (hasMore) {
         let query = client
           .from('leads2')
-          .select('datacriacao')
+          .select('datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead')
           .not('datacriacao', 'is', null);
 
-        if (startDate) {
-          query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
-        }
-        if (endDate) {
-          query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
+        if (typeof days === 'number' && days > 0) {
+          const start = new Date();
+          start.setDate(start.getDate() - days);
+          query = query.gte('datacriacao', start.toISOString());
+        } else {
+          if (startDate) {
+            query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+          }
+          if (endDate) {
+            query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
+          }
         }
 
         query = query.range(from, from + pageSize - 1);
@@ -325,7 +520,7 @@ export class DashboardService {
 
         if (error) {
           this.logger.error('Erro ao buscar dados de leads2:', error);
-          throw new Error(`Erro na consulta leads2: ${error.message}`);
+          throw new Error(`Erro na consulta leads2: ${error.message} `);
         }
 
         if (data && data.length > 0) {
@@ -338,15 +533,30 @@ export class DashboardService {
         }
       }
 
-      this.logger.log(`Total de registros coletados da leads2: ${allLeads2Data.length}`);
+      this.logger.log(`Total de registros coletados da leads2: ${allLeads2Data.length} `);
 
       // Agregar os dados manualmente por dia (sem ajuste de fuso horário)
       const dailyCounts = new Map<string, number>();
 
-      // Processar dados de leads2
+      const normalizeCampaign = (campaign: string | null | undefined): string | null => {
+        if (!campaign) return null;
+        const val = campaign.toString();
+        if (/^DINASTIA \|.*\|.*$/.test(val)) {
+          const parts = val.split('|');
+          return parts[1]?.trim() || val;
+        }
+        return val;
+      };
+
       allLeads2Data.forEach((lead: any) => {
+        const normalizedCampaign = normalizeCampaign(lead.utm_campaign);
+        if (filters?.campaign && normalizedCampaign !== filters.campaign) return;
+        if (filters?.source && (lead.utm_source || '') !== filters.source) return;
+        if (filters?.content && (lead.utm_content || '') !== filters.content) return;
+        if (filters?.classification && (lead.classificacao_do_lead || '').trim() !== filters.classification) return;
+
         const date = new Date(lead.datacriacao);
-        const day = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        const day = date.toISOString().split('T')[0];
         dailyCounts.set(day, (dailyCounts.get(day) || 0) + 1);
       });
 
@@ -359,7 +569,7 @@ export class DashboardService {
         .sort((a, b) => a.day.localeCompare(b.day));
 
       const totalLeads = result.reduce((sum, item) => sum + item.total_leads_per_day, 0);
-      this.logger.log(`Query direta com paginação retornando ${result.length} registros de volume diário com total de ${totalLeads} leads (apenas leads2)`);
+      this.logger.log(`Query direta com paginação retornando ${result.length} registros de volume diário com total de ${totalLeads} leads(apenas leads2)`);
       return result;
 
     } catch (error) {
@@ -372,45 +582,39 @@ export class DashboardService {
    * Busca resumo dos KPIs de agendamento
    * Calcula total de leads, total de agendamentos e taxa de agendamento
    */
-  async getSchedulingSummary(): Promise<SchedulingSummaryData> {
+  async getSchedulingSummary(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters
+  ): Promise<SchedulingSummaryData> {
     try {
-      this.logger.log('Buscando resumo de KPIs de agendamento');
+      this.logger.log('Buscando resumo de KPIs de agendamento com filtros');
 
       const client = this.supabaseService.getClient();
-      if (!client) {
-        throw new Error('Cliente Supabase não inicializado');
-      }
+      if (!client) throw new Error('Cliente Supabase não inicializado');
 
-      // Buscar total de leads
-      const { count: totalLeads, error: totalError } = await client
-        .from('MR_base_leads')
-        .select('*', { count: 'exact', head: true });
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
 
-      if (totalError) {
-        this.logger.error('Erro ao buscar total de leads:', totalError);
-        throw new Error(`Erro na consulta de total de leads: ${totalError.message}`);
-      }
+      // Total Leads Query
+      const leadsSql = `SELECT COUNT(*) as count FROM public.leads2 ${whereSql}`;
 
-      // Buscar total de agendamentos (leads com data_do_agendamento não nulo)
-      const { count: totalAppointments, error: appointmentsError } = await client
-        .from('MR_base_leads')
-        .select('*', { count: 'exact', head: true })
-        .not('data_do_agendamento', 'is', null);
+      // Appointments Query (adds extra condition)
+      const apptWhereSql = whereSql ? `${whereSql} AND data_do_agendamento IS NOT NULL` : `WHERE data_do_agendamento IS NOT NULL`;
+      const apptSql = `SELECT COUNT(*) as count FROM public.leads2 ${apptWhereSql}`;
 
-      if (appointmentsError) {
-        this.logger.error('Erro ao buscar total de agendamentos:', appointmentsError);
-        throw new Error(`Erro na consulta de agendamentos: ${appointmentsError.message}`);
-      }
+      const [leadsResult, apptResult] = await Promise.all([
+        client.rpc('execute_sql', { query: leadsSql }),
+        client.rpc('execute_sql', { query: apptSql })
+      ]);
 
-      const totalLeadsCount = totalLeads || 0;
-      const totalAppointmentsCount = totalAppointments || 0;
-      const schedulingRate = totalLeadsCount > 0 ? totalAppointmentsCount / totalLeadsCount : 0;
-
-      this.logger.log(`Resumo de agendamentos: ${totalAppointmentsCount}/${totalLeadsCount} leads (${(schedulingRate * 100).toFixed(2)}%)`);
+      const totalLeads = leadsResult.data?.[0]?.count || 0;
+      const totalAppointments = apptResult.data?.[0]?.count || 0;
+      const schedulingRate = totalLeads > 0 ? totalAppointments / totalLeads : 0;
 
       return {
-        totalLeads: totalLeadsCount,
-        totalAppointments: totalAppointmentsCount,
+        totalLeads,
+        totalAppointments,
         schedulingRate
       };
 
@@ -429,97 +633,176 @@ export class DashboardService {
   async getDailyAppointments(
     startDate?: string,
     endDate?: string,
-    days?: number
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<DailyAppointmentsData[]> {
     try {
       const periodInfo = startDate || endDate ? ` (${startDate || 'início'} até ${endDate || 'fim'})` : '';
-      this.logger.log(`Buscando volume diário de agendamentos${periodInfo}`);
+      this.logger.log(`Buscando volume diário de agendamentos${periodInfo} com filtros`);
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Query SQL unificada para buscar agendamentos diários de ambas as tabelas
-      // com conversão de texto para timestamp e deduplicação
-      let query = '';
-      if (typeof days === 'number' && days > 0) {
-        return await this.getDailyAppointmentsFallback(undefined, undefined, days);
-      } else {
-        query = `
-          SELECT 
-            day,
-            COUNT(*) AS appointments_per_day
-          FROM (
-            SELECT 
-              DATE_TRUNC('day', to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS'))::date AS day
-            FROM public.leads2
-            WHERE data_do_agendamento IS NOT NULL AND data_do_agendamento <> ''
-          ) AS events
-          WHERE 1=1
-        `;
-        if (startDate) {
-          query += ` AND day >= '${startDate}'`;
-        }
-        if (endDate) {
-          query += ` AND day <= '${endDate}'`;
-        }
-      }
+      // Usar expressão de timestamp para a coluna de data
+      const dateCol = "to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS')";
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters, dateCol);
 
-      query += `
+      const sql = `
+        SELECT 
+          DATE_TRUNC('day', ${dateCol})::date AS day,
+          COUNT(*) AS appointments_per_day
+        FROM public.leads2
+        ${whereSql ? whereSql + " AND data_do_agendamento IS NOT NULL AND data_do_agendamento <> ''" : "WHERE data_do_agendamento IS NOT NULL AND data_do_agendamento <> ''"}
         GROUP BY day 
         ORDER BY day ASC
       `;
 
-      this.logger.log(`Executando query de agendamentos diários: ${query}`);
+      this.logger.log(`Executando query de agendamentos diários: ${sql}`);
 
-
-      const { data, error } = await client.rpc('execute_sql', {
-        query: query
-      });
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
 
       if (error) {
         this.logger.error('Erro ao executar query de agendamentos diários:', error);
-        // Fallback: usar processamento no lado da aplicação com lógica corrigida
-        return await this.getDailyAppointmentsFallback(startDate, endDate);
+        return await this.getDailyAppointmentsFallback(startDate, endDate, days, filters);
       }
 
       if (!data || data.length === 0) {
-        this.logger.warn('Nenhum dado de agendamentos diários encontrado');
-        return [];
+        this.logger.warn('Query de agendamentos retornou vazio, utilizando fallback para processamento manual');
+        return await this.getDailyAppointmentsFallback(startDate, endDate, days, filters);
       }
 
-      // Transformar os dados para o formato esperado
       const appointmentsData: DailyAppointmentsData[] = (data || []).map((row: any) => ({
         day: row.day,
         appointments_per_day: parseInt(row.appointments_per_day, 10)
       }));
 
-      // Preencher lacunas de datas com 0 agendamentos se startDate e endDate forem fornecidos
-      const result = this.fillDateGapsForAppointments(appointmentsData, startDate, endDate);
-
-      this.logger.log(`Retornando ${result.length} registros de agendamentos diários (incluindo dias com 0 agendamentos)`);
-      return result;
+      return this.fillDateGapsForAppointments(appointmentsData, startDate, endDate);
 
     } catch (error) {
       this.logger.error('Erro ao buscar agendamentos diários:', error);
-      // Em caso de erro, tentar fallback
-      return await this.getDailyAppointmentsFallback(startDate, endDate);
+      throw error;
     }
   }
 
   async getAppointmentsByPerson(
     startDate?: string,
     endDate?: string,
-    days?: number
-  ): Promise<AppointmentsByPersonPerDayData[]> {
-    return this.getAppointmentsByPersonPerDay(startDate, endDate, days);
+    days?: number,
+    filters?: DashboardFilters
+  ): Promise<Array<{ day: string; agendado_por: string; appointment_count: number }>> {
+    try {
+      const client = this.supabaseService.getClient();
+      if (!client) {
+        throw new Error('Supabase client not initialized');
+      }
+
+      const dateCol = "to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS')";
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters, dateCol);
+
+      const sql = `
+        SELECT 
+          DATE_TRUNC('day', ${dateCol})::date AS day,
+          agendado_por,
+          COUNT(chatid) AS appointment_count
+        FROM public.leads2
+        ${whereSql ? whereSql + " AND agendado_por IS NOT NULL AND TRIM(agendado_por) <> '' AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''" : "WHERE agendado_por IS NOT NULL AND TRIM(agendado_por) <> '' AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''"}
+        GROUP BY day, agendado_por
+        ORDER BY day ASC, appointment_count DESC
+      `;
+
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
+      if (!error && Array.isArray(data)) {
+        return (data || []).map((row: any) => ({
+          day: row.day,
+          agendado_por: row.agendado_por,
+          appointment_count: parseInt(row.appointment_count, 10)
+        }));
+      }
+
+      // Fallback manual com paginação
+      const allData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        let q = client
+          .from('leads2')
+          .select('agendado_por, data_do_agendamento, chatid, utm_campaign, utm_source, utm_content, classificacao_do_lead')
+          .not('agendado_por', 'is', null)
+          .neq('agendado_por', '')
+          .not('data_do_agendamento', 'is', null)
+          .neq('data_do_agendamento', '');
+        q = q.range(from, from + pageSize - 1);
+        const { data: page, error: pageErr } = await q;
+        if (pageErr) {
+          this.logger.error('Erro no fallback manual de agendamentos por pessoa:', pageErr);
+          break;
+        }
+        if (page && page.length > 0) {
+          allData.push(...page);
+          from += pageSize;
+          hasMore = page.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const startTs = startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : undefined;
+      const endTs = endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : undefined;
+      const counts = new Map<string, number>();
+      const normalizeCampaign = (campaign: string | null | undefined): string | null => {
+        if (!campaign) return null;
+        const val = campaign.toString();
+        if (/^DINASTIA \|.*\|.*$/.test(val)) {
+          const parts = val.split('|');
+          return parts[1]?.trim() || val;
+        }
+        return val;
+      };
+
+      for (const row of allData) {
+        const normalizedCampaign = normalizeCampaign(row.utm_campaign);
+        if (filters?.campaign && normalizedCampaign !== filters.campaign) continue;
+        if (filters?.source && (row.utm_source || '') !== filters.source) continue;
+        if (filters?.content && (row.utm_content || '') !== filters.content) continue;
+        if (filters?.classification && (row.classificacao_do_lead || '').trim() !== filters.classification) continue;
+        const person = String(row.agendado_por).trim();
+        if (!person) continue;
+        const dt = this.parseBrazilianDateTime(String(row.data_do_agendamento));
+        if (!dt || isNaN(dt.getTime())) continue;
+        const t = dt.getTime();
+        if (typeof days === 'number' && days > 0) {
+          const now = new Date();
+          const windowStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+          if (dt < windowStart || dt > now) continue;
+        } else {
+          if (startTs && t < startTs) continue;
+          if (endTs && t > endTs) continue;
+        }
+        const dayKey = dt.toISOString().split('T')[0];
+        const key = `${dayKey}|${person}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+
+      return Array.from(counts.entries()).map(([key, count]) => {
+        const sep = key.indexOf('|');
+        const day = sep >= 0 ? key.slice(0, sep) : key;
+        const agendado_por = sep >= 0 ? key.slice(sep + 1) : '';
+        return { day, agendado_por, appointment_count: count };
+      }).sort((a, b) => a.day.localeCompare(b.day) || b.appointment_count - a.appointment_count);
+    } catch (error) {
+      this.logger.error('Erro ao buscar agendamentos por pessoa:', error);
+      throw error;
+    }
   }
 
   async getAppointmentsByPersonPerDay(
     startDate?: string,
     endDate?: string,
-    days?: number
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<AppointmentsByPersonPerDayData[]> {
     try {
       const client = this.supabaseService.getClient();
@@ -527,99 +810,42 @@ export class DashboardService {
         throw new Error('Supabase client not initialized');
       }
 
-      let sql = `
+      const dateCol = "to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS')";
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters, dateCol);
+
+      const sql = `
         SELECT 
-          DATE_TRUNC('day', to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS'))::date AS day,
+          DATE_TRUNC('day', ${dateCol})::date AS day,
           agendado_por,
           COUNT(chatid) AS appointment_count
         FROM public.leads2
-        WHERE agendado_por IS NOT NULL AND TRIM(agendado_por) <> ''
-          AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''
-      `;
-
-      if (typeof days === 'number' && days > 0) {
-        sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') >= NOW() - INTERVAL '${days} days'`;
-      } else {
-        if (startDate) {
-          sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') >= '${startDate}T00:00:00.000Z'`;
-        }
-        if (endDate) {
-          sql += ` AND to_timestamp(data_do_agendamento, 'DD/MM/YYYY, HH24:MI:SS') <= '${endDate}T23:59:59.999Z'`;
-        }
-      }
-
-      sql += `
+        ${whereSql ? whereSql + " AND agendado_por IS NOT NULL AND TRIM(agendado_por) <> '' AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''" : "WHERE agendado_por IS NOT NULL AND TRIM(agendado_por) <> '' AND data_do_agendamento IS NOT NULL AND TRIM(data_do_agendamento) <> ''"}
         GROUP BY day, agendado_por
         ORDER BY day ASC, appointment_count DESC
       `;
 
-      try {
-        const { data, error } = await client.rpc('execute_sql', { query: sql });
-        if (!error && data) {
-          return (data || []).map((row: any) => ({
-            day: row.day,
-            agendado_por: row.agendado_por,
-            appointment_count: parseInt(row.appointment_count, 10)
-          }));
-        }
-      } catch (_) { }
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
 
-      const allData: any[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      let hasMore = true;
-      while (hasMore) {
-        let query = client
-          .from('leads2')
-          .select('agendado_por, data_do_agendamento, chatid')
-          .not('agendado_por', 'is', null)
-          .neq('agendado_por', '')
-          .not('data_do_agendamento', 'is', null)
-          .neq('data_do_agendamento', '');
-        query = query.range(from, from + pageSize - 1);
-        const { data, error } = await query;
-        if (error) {
-          throw new Error(error.message);
-        }
-        if (data && data.length > 0) {
-          allData.push(...data);
-          from += pageSize;
-          hasMore = data.length === pageSize;
-        } else {
-          hasMore = false;
-        }
+      if (error) {
+        this.logger.error('Erro ao buscar agendamentos por pessoa por dia:', error);
+        throw error;
       }
 
-      const now = new Date();
-      const startTs = typeof days === 'number' && days > 0
-        ? new Date(now.getTime() - days * 24 * 60 * 60 * 1000).getTime()
-        : startDate ? new Date(`${startDate}T00:00:00.000Z`).getTime() : undefined;
-      const endTs = typeof days === 'number' && days > 0
-        ? now.getTime()
-        : endDate ? new Date(`${endDate}T23:59:59.999Z`).getTime() : undefined;
+      // Transformar os dados para o formato esperado pelo frontend (agrupado por dia)
+      const groupedData = new Map<string, any>();
 
-      const counts = new Map<string, number>();
-      allData.forEach((row) => {
-        const person = String(row.agendado_por).trim();
-        if (!person) return;
-        const dt = this.parseBrazilianDateTime(String(row.data_do_agendamento));
-        if (!dt || isNaN(dt.getTime())) return;
-        const t = dt.getTime();
-        if (startTs && t < startTs) return;
-        if (endTs && t > endTs) return;
-        const dayKey = dt.toISOString().split('T')[0];
-        const key = `${dayKey}|${person}`;
-        counts.set(key, (counts.get(key) || 0) + 1);
+      data?.forEach((row: any) => {
+        const day = row.day;
+        if (!groupedData.has(day)) {
+          groupedData.set(day, { day });
+        }
+        const entry = groupedData.get(day);
+        const person = row.agendado_por || 'Desconhecido';
+        entry[person] = parseInt(row.appointment_count, 10);
       });
 
-      return Array.from(counts.entries())
-        .map(([key, appointment_count]) => {
-          const sep = key.indexOf('|');
-          const day = sep >= 0 ? key.slice(0, sep) : key;
-          const agendado_por = sep >= 0 ? key.slice(sep + 1) : '';
-          return { day, agendado_por, appointment_count };
-        })
-        .sort((a, b) => a.day.localeCompare(b.day) || b.appointment_count - a.appointment_count);
+      return Array.from(groupedData.values()).sort((a, b) => a.day.localeCompare(b.day));
+
     } catch (error) {
       this.logger.error('Erro ao buscar agendamentos por pessoa por dia:', error);
       throw error;
@@ -633,7 +859,8 @@ export class DashboardService {
   private async getDailyAppointmentsFallback(
     startDate?: string,
     endDate?: string,
-    days?: number
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<DailyAppointmentsData[]> {
     try {
       this.logger.log('Usando fallback para agendamentos diários apenas da tabela leads2 (sem deduplicação)');
@@ -646,7 +873,7 @@ export class DashboardService {
       // Buscar agendamentos da tabela leads2
       const { data: leads2Data, error: leads2Error } = await client
         .from('leads2')
-        .select('data_do_agendamento')
+        .select('data_do_agendamento, utm_campaign, utm_source, utm_content, classificacao_do_lead')
         .not('data_do_agendamento', 'is', null)
         .neq('data_do_agendamento', '')
         .order('data_do_agendamento', { ascending: true })
@@ -669,7 +896,22 @@ export class DashboardService {
       let invalidDatesCount = 0;
 
       // Processar dados do leads2
+      const normalizeCampaign = (campaign: string | null | undefined): string | null => {
+        if (!campaign) return null;
+        const val = campaign.toString();
+        if (/^DINASTIA \|.*\|.*$/.test(val)) {
+          const parts = val.split('|');
+          return parts[1]?.trim() || val;
+        }
+        return val;
+      };
+
       (leads2Data || []).forEach((appointment: any) => {
+        const normalizedCampaign = normalizeCampaign(appointment.utm_campaign);
+        if (filters?.campaign && normalizedCampaign !== filters.campaign) return;
+        if (filters?.source && (appointment.utm_source || '') !== filters.source) return;
+        if (filters?.content && (appointment.utm_content || '') !== filters.content) return;
+        if (filters?.classification && (appointment.classificacao_do_lead || '').trim() !== filters.classification) return;
         try {
           const dateStr = appointment.data_do_agendamento;
           if (!dateStr) { invalidDatesCount++; return; }
@@ -823,46 +1065,35 @@ export class DashboardService {
     }
   }
 
-  async getUnifiedOriginSummary(days?: number, fromDate?: Date, toDate?: Date): Promise<UnifiedOriginSummaryData[]> {
+  async getUnifiedOriginSummary(
+    days?: number,
+    fromDate?: Date,
+    toDate?: Date,
+    filters?: DashboardFilters
+  ): Promise<UnifiedOriginSummaryData[]> {
     try {
-      this.logger.log('Buscando dados de origem dos leads exclusivamente da tabela leads2...');
+      this.logger.log('Buscando dados de origem dos leads exclusivamente da tabela leads2 com filtros...');
 
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Supabase client not initialized');
       }
 
-      // Calcular período de filtro
-      let startDate: Date;
-      let endDate: Date;
+      // Converter datas para string se existirem, para usar no buildWhereClause
+      const startDateStr = fromDate ? fromDate.toISOString().split('T')[0] : undefined;
+      const endDateStr = toDate ? toDate.toISOString().split('T')[0] : undefined;
 
-      if (fromDate && toDate) {
-        startDate = fromDate;
-        endDate = toDate;
-      } else if (days) {
-        endDate = new Date();
-        startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
-      } else {
-        // Padrão: últimos 30 dias
-        endDate = new Date();
-        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-
-      // Ajustar para o fuso horário brasileiro (UTC-3)
-      const startDateBR = new Date(startDate.getTime() - 3 * 60 * 60 * 1000);
-      const endDateBR = new Date(endDate.getTime() - 3 * 60 * 60 * 1000);
-
-      this.logger.log(`Filtrando dados de origem entre ${startDateBR.toISOString()} e ${endDateBR.toISOString()} (horário brasileiro)`);
+      const whereSql = this.buildWhereClause(startDateStr, endDateStr, days, filters);
 
       // Tentar usar a função execute_sql primeiro
       try {
-        const sqlQuery = `
-          SELECT 
-            normalized_origin AS origin_name, 
-            COUNT(*) AS lead_count 
-          FROM ( 
-            SELECT 
-              CASE 
+        const sql = `
+          SELECT
+            normalized_origin AS origin_name,
+            COUNT(chatid) AS lead_count
+          FROM (
+            SELECT
+              CASE
                 WHEN origem ILIKE '%ISCA SCOPELINE%' THEN 'Isca Scopeline'
                 WHEN origem ILIKE '%ISCA HORMOZI%' THEN 'Isca Hormozi'
                 WHEN origem ILIKE '%MASTERCLASS%' THEN 'Masterclass'
@@ -875,39 +1106,25 @@ export class DashboardService {
                 WHEN origem ILIKE '%VENDA%' THEN 'Venda'
                 WHEN origem ILIKE '%GOOGLE ADS%' OR origem ILIKE '%GOOGLE%' THEN 'Google Ads'
                 WHEN origem ILIKE '%FACEBOOK%' OR origem ILIKE '%META%' THEN 'Facebook Ads'
-                WHEN origem ILIKE '%INSTAGRAM%' THEN 'Instagram'
-                WHEN origem ILIKE '%LINKEDIN%' THEN 'LinkedIn'
+                WHEN origem ILIKE '%INSTAGRAM%' OR origem ILIKE '%IG%' THEN 'Instagram'
                 WHEN origem ILIKE '%TIKTOK%' THEN 'TikTok'
-                WHEN origem ILIKE '%WHATSAPP%' THEN 'WhatsApp'
+                WHEN origem ILIKE '%LINKEDIN%' THEN 'LinkedIn'
                 WHEN origem ILIKE '%EMAIL%' THEN 'Email Marketing'
-                WHEN origem ILIKE '%SEO%' OR origem ILIKE '%ORGANICO%' THEN 'SEO/Orgânico'
-                WHEN origem ILIKE '%INDICACAO%' OR origem ILIKE '%REFERRAL%' THEN 'Indicação'
-                WHEN origem ILIKE '%DINASTIA%' THEN origem
-                WHEN origem IS NULL OR origem = '' THEN 'Sem Origem'
+                WHEN origem ILIKE '%WHATSAPP%' THEN 'WhatsApp'
                 ELSE 'Outros'
-              END AS normalized_origin 
-            FROM 
-              public.leads2 
-            WHERE 
-              datacriacao >= '${startDateBR.toISOString()}'
-              AND datacriacao <= '${endDateBR.toISOString()}'
-          ) AS normalized_data 
-          GROUP BY 
-            normalized_origin 
-          ORDER BY 
-            lead_count DESC;
+              END AS normalized_origin,
+              chatid
+            FROM public.leads2
+            ${whereSql ? whereSql + ' AND ' : 'WHERE '} origem IS NOT NULL AND origem <> ''
+          ) AS sub
+          GROUP BY normalized_origin
+          ORDER BY lead_count DESC;
         `;
 
-        const { data: sqlResult, error: sqlError } = await client.rpc('execute_sql', {
-          query: sqlQuery
-        });
-
-        if (!sqlError && sqlResult && Array.isArray(sqlResult)) {
-          this.logger.log(`Query SQL executada com sucesso. Retornando ${sqlResult.length} categorias de origem.`);
-          return sqlResult.map(row => ({
-            origin_name: row.origin_name,
-            lead_count: parseInt(row.lead_count, 10)
-          }));
+        const { data, error } = await client.rpc('execute_sql', { query: sql });
+        if (!error && Array.isArray(data)) {
+          this.logger.log(`Query SQL executada com sucesso. Retornando ${data.length} categorias de origem.`);
+          return (data || []).map((row: any) => ({ origin_name: row.origin_name || row.normalized_origin, lead_count: parseInt(row.lead_count, 10) }));
         } else {
           this.logger.warn('Função execute_sql não disponível ou retornou erro. Usando fallback manual.');
         }
@@ -926,10 +1143,22 @@ export class DashboardService {
       while (hasMore) {
         let query = client
           .from('leads2')
-          .select('origem, datacriacao')
-          .gte('datacriacao', startDateBR.toISOString())
-          .lte('datacriacao', endDateBR.toISOString())
-          .range(from, from + pageSize - 1);
+          .select('origem, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead');
+
+        if (days && days > 0) {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - days);
+          query = query.gte('datacriacao', startDate.toISOString());
+        } else {
+          if (fromDate) {
+            query = query.gte('datacriacao', fromDate.toISOString());
+          }
+          if (toDate) {
+            query = query.lte('datacriacao', toDate.toISOString());
+          }
+        }
+        
+        query = query.range(from, from + pageSize - 1);
 
         const { data, error } = await query;
 
@@ -1020,8 +1249,23 @@ export class DashboardService {
       // Processar dados e agrupar por origem normalizada
       const originCounts = new Map<string, number>();
 
+      const normalizeCampaign = (campaign: string | null | undefined): string | null => {
+        if (!campaign) return null;
+        const val = campaign.toString();
+        if (/^DINASTIA \|.*\|.*$/.test(val)) {
+          const parts = val.split('|');
+          return parts[1]?.trim() || val;
+        }
+        return val;
+      };
+
       allData.forEach(lead => {
         const normalizedOrigin = normalizeOrigin(lead.origem);
+        const normalizedCampaign = normalizeCampaign(lead.utm_campaign);
+        if (filters?.source && normalizedOrigin !== filters.source) return;
+        if (filters?.classification && (lead.classificacao_do_lead || '').trim() !== filters.classification) return;
+        if (filters?.campaign && normalizedCampaign !== filters.campaign) return;
+        if (filters?.content && (lead.utm_content || '') !== filters.content) return;
         originCounts.set(normalizedOrigin, (originCounts.get(normalizedOrigin) || 0) + 1);
       });
 
@@ -1045,7 +1289,8 @@ export class DashboardService {
   async getLeadsByClassification(
     startDate?: string,
     endDate?: string,
-    days?: number
+    days?: number,
+    filters?: DashboardFilters
   ): Promise<LeadsByClassificationData[]> {
     try {
       const client = this.supabaseService.getClient();
@@ -1053,147 +1298,158 @@ export class DashboardService {
         throw new Error('Supabase client not initialized');
       }
 
-      try {
-        let sql = `
-          SELECT 
-            TRIM(classificacao_do_lead) AS classification_name,
-            COUNT(*) AS lead_count
-          FROM public.leads2
-          WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) <> ''
-            AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]+$'
-        `;
-        const params: string[] = [];
-        if (typeof days === 'number' && days > 0) {
-          sql += ` AND datacriacao >= NOW() - INTERVAL '${days} days'`;
-        } else {
-          if (startDate) {
-            sql += ` AND datacriacao >= '${startDate}T00:00:00.000Z'`;
-          }
-          if (endDate) {
-            sql += ` AND datacriacao <= '${endDate}T23:59:59.999Z'`;
-          }
-        }
-        sql += `
-          GROUP BY TRIM(classificacao_do_lead)
-          ORDER BY lead_count DESC;
-        `;
-        const { data, error } = await client.rpc('execute_sql', { query: sql });
-        if (!error && data && Array.isArray(data)) {
-          return data.map((row: any) => ({
-            classification_name: row.classification_name,
-            lead_count: parseInt(row.lead_count, 10)
-          }));
-        }
-      } catch (_) { }
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
 
-      const allData: any[] = [];
+      const sql = `
+        SELECT 
+          TRIM(classificacao_do_lead) AS classification_name,
+          COUNT(*) AS lead_count
+        FROM public.leads2
+        ${whereSql ? whereSql + " AND classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]$'" : "WHERE classificacao_do_lead IS NOT NULL AND TRIM(classificacao_do_lead) ~ '^[A-Za-z]$'"}
+        GROUP BY TRIM(classificacao_do_lead)
+        ORDER BY lead_count DESC;
+      `;
+
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
+
+      if (!error && data && Array.isArray(data)) {
+        return data.map((row: any) => ({
+          classification_name: row.classification_name,
+          lead_count: parseInt(row.lead_count, 10)
+        }));
+      }
+
+      // Fallback: buscar e processar manualmente com paginação
+      this.logger.warn('RPC para classificação de leads falhou, usando fallback manual com paginação.');
+
+      const allItems: { classificacao_do_lead: string | null; utm_campaign?: string | null; utm_source?: string | null; utm_content?: string | null }[] = [];
       let from = 0;
       const pageSize = 1000;
       let hasMore = true;
+
       while (hasMore) {
-        let query = client
+        let fallbackQuery = client
           .from('leads2')
-          .select('classificacao_do_lead, datacriacao')
-          .not('classificacao_do_lead', 'is', null)
-          .neq('classificacao_do_lead', '');
+          .select('classificacao_do_lead, datacriacao, utm_campaign, utm_source, utm_content');
 
-        if (typeof days === 'number' && days > 0) {
-          const now = new Date();
-          const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-          query = query.gte('datacriacao', start.toISOString());
+        if (days && days > 0) {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - days);
+          fallbackQuery = fallbackQuery.gte('datacriacao', startDate.toISOString());
         } else {
-          if (startDate) {
-            query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
-          }
-          if (endDate) {
-            query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
-          }
+          if (startDate) fallbackQuery = fallbackQuery.gte('datacriacao', `${startDate}T00:00:00.000Z`);
+          if (endDate) fallbackQuery = fallbackQuery.lte('datacriacao', `${endDate}T23:59:59.999Z`);
         }
 
-        query = query.range(from, from + pageSize - 1);
-        const { data, error } = await query;
+        const { data, error } = await fallbackQuery.range(from, from + pageSize - 1);
+
         if (error) {
-          throw new Error(error.message);
+          this.logger.error('Erro no fallback de classificação de leads durante a paginação:', error);
+          return []; // Falha na paginação, retorna vazio
         }
+
         if (data && data.length > 0) {
-          allData.push(...data);
+          allItems.push(...data);
           from += pageSize;
-          hasMore = data.length === pageSize;
         } else {
           hasMore = false;
         }
+
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        }
       }
+
       const counts = new Map<string, number>();
-      allData.forEach(item => {
-        const key = String(item.classificacao_do_lead).trim();
-        if (!key) return;
-        if (!/^[A-Za-z]+$/.test(key)) return;
-        counts.set(key, (counts.get(key) || 0) + 1);
+      const singleLetterRegex = /^[A-Za-z]$/;
+      const normalizeCampaign = (campaign: string | null | undefined): string | null => {
+        if (!campaign) return null;
+        const val = campaign.toString();
+        if (/^DINASTIA \|.*\|.*$/.test(val)) {
+          const parts = val.split('|');
+          return parts[1]?.trim() || val;
+        }
+        return val;
+      };
+
+      allItems.forEach(item => {
+        const classification = item.classificacao_do_lead?.trim();
+        if (!classification || !singleLetterRegex.test(classification)) return;
+
+        const normalizedCampaign = normalizeCampaign(item.utm_campaign);
+        if (filters?.campaign && normalizedCampaign !== filters.campaign) return;
+        if (filters?.source && (item.utm_source || '') !== filters.source) return;
+        if (filters?.content && (item.utm_content || '') !== filters.content) return;
+        if (filters?.classification && classification !== filters.classification) return;
+
+        counts.set(classification, (counts.get(classification) || 0) + 1);
       });
+
       return Array.from(counts.entries())
         .map(([classification_name, lead_count]) => ({ classification_name, lead_count }))
         .sort((a, b) => b.lead_count - a.lead_count);
+
     } catch (error) {
+      this.logger.error('Erro ao buscar leads por classificação:', error);
       throw error;
     }
   }
 
-  async getDashboardLeadsByStage(): Promise<LeadsByStageData[]> {
+  async getDashboardLeadsByStage(
+    startDate?: string,
+    endDate?: string,
+    days?: number,
+    filters?: DashboardFilters
+  ): Promise<LeadsByStageData[]> {
     try {
-      this.logger.log('Buscando distribuição de leads por etapa...');
-
+      this.logger.log('Buscando distribuição de leads por etapa com filtros...');
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Executar a query SQL especificada pelo usuário
-      const { data, error } = await client
-        .from('leads2')
-        .select('etapa')
-        .not('etapa', 'is', null)
-        .neq('etapa', '')
-        .limit(50000);
+      const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
+
+      const sql = `
+        SELECT 
+          etapa,
+          COUNT(*) AS lead_count
+        FROM public.leads2
+        ${whereSql ? whereSql + " AND etapa IS NOT NULL AND etapa <> ''" : "WHERE etapa IS NOT NULL AND etapa <> ''"}
+        GROUP BY etapa
+        ORDER BY lead_count DESC
+      `;
+
+      const { data, error } = await client.rpc('execute_sql', { query: sql });
 
       if (error) {
         this.logger.error('Erro ao buscar leads por etapa:', error);
         throw new Error(`Erro na consulta: ${error.message}`);
       }
 
-      // Função para normalizar nomes de etapas similares
       const normalizeStage = (stage: string): string => {
         const lowerStage = stage.toLowerCase().trim();
-
-        // Consolidar variações de "no-show"
         if (lowerStage === 'noshow' || lowerStage === 'no_show' || lowerStage === 'no show') {
           return 'No-show';
         }
-
-        // Consolidar variações de "agendado"
         if (lowerStage === 'agendado' || lowerStage === 'agendados') {
           return 'Agendado';
         }
-
-        // Consolidar variações de "follow up"
         if (lowerStage === 'follow_up' || lowerStage === 'follow up' || lowerStage === 'followup') {
           return 'Follow-up';
         }
-
-        // Capitalizar primeira letra de cada palavra para outras etapas
         return stage
           .split(' ')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
           .join(' ');
       };
 
-      // Agregar dados por etapa manualmente com consolidação
       const stageCounts = new Map<string, number>();
-      (data || []).forEach((lead: any) => {
-        const normalizedStage = normalizeStage(lead.etapa);
-        stageCounts.set(normalizedStage, (stageCounts.get(normalizedStage) || 0) + 1);
+      (data || []).forEach((row: any) => {
+        const normalizedStage = normalizeStage(row.etapa);
+        stageCounts.set(normalizedStage, (stageCounts.get(normalizedStage) || 0) + parseInt(row.lead_count, 10));
       });
 
-      // Converter para array e ordenar por contagem decrescente
       const result: LeadsByStageData[] = Array.from(stageCounts.entries())
         .map(([stage_name, lead_count]) => ({
           stage_name,
@@ -1203,142 +1459,13 @@ export class DashboardService {
 
       this.logger.log(`Retornando ${result.length} etapas com distribuição de leads`);
       return result;
-
     } catch (error) {
       this.logger.error('Erro ao buscar distribuição de leads por etapa:', error);
       throw error;
     }
   }
 
-  async getCampaignDrilldown(
-    viewBy?: 'campaign' | 'source' | 'content',
-    campaign?: string,
-    source?: string,
-    startDate?: string,
-    endDate?: string,
-    days?: number,
-  ): Promise<DrilldownItem[]> {
-    try {
-      const client = this.supabaseService.getClient();
-      if (!client) {
-        throw new Error('Supabase client not initialized');
-      }
-      const hierarchy: Array<'campaign' | 'source' | 'content'> = ['campaign', 'source', 'content'];
-      const view = (viewBy && hierarchy.includes(viewBy)) ? viewBy : 'campaign';
-      let groupByColumn = view === 'campaign' ? 'utm_campaign' : view === 'source' ? 'utm_source' : 'utm_content';
-      const whereClauses: string[] = [];
-      const escCampaign = campaign ? campaign.replace(/'/g, "''") : undefined;
-      const escSource = source ? source.replace(/'/g, "''") : undefined;
-      if (view === 'campaign') {
-        if (escCampaign && escSource) {
-          groupByColumn = 'utm_content';
-          whereClauses.push(`utm_campaign = '${escCampaign}'`);
-          whereClauses.push(`utm_source = '${escSource}'`);
-        } else if (escCampaign) {
-          groupByColumn = 'utm_source';
-          whereClauses.push(`utm_campaign = '${escCampaign}'`);
-        }
-      } else if (view === 'source') {
-        if (escSource) {
-          groupByColumn = 'utm_content';
-          whereClauses.push(`utm_source = '${escSource}'`);
-        }
-        if (escCampaign) {
-          whereClauses.push(`utm_campaign = '${escCampaign}'`);
-        }
-      } else {
-        groupByColumn = 'utm_content';
-        if (escCampaign) {
-          whereClauses.push(`utm_campaign = '${escCampaign}'`);
-        }
-        if (escSource) {
-          whereClauses.push(`utm_source = '${escSource}'`);
-        }
-      }
-      if (typeof days === 'number' && days > 0) {
-        whereClauses.push(`datacriacao >= NOW() - INTERVAL '${days} days'`);
-      } else {
-        if (startDate) whereClauses.push(`datacriacao >= '${startDate}T00:00:00.000Z'`);
-        if (endDate) whereClauses.push(`datacriacao <= '${endDate}T23:59:59.999Z'`);
-      }
-      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-      const sql = `
-        SELECT ${groupByColumn} AS name, COUNT(chatid) AS value
-        FROM public.leads2
-        ${whereSql ? whereSql + ' AND ' : 'WHERE '}${groupByColumn} IS NOT NULL AND ${groupByColumn} <> ''
-        GROUP BY ${groupByColumn}
-        ORDER BY value DESC;
-      `;
 
-      try {
-        const { data, error } = await client.rpc('execute_sql', { query: sql });
-        if (!error && Array.isArray(data)) {
-          return (data || []).map((row: any) => ({ name: row.name, value: parseInt(row.value, 10) }));
-        }
-      } catch (_) { }
-
-      const counts = new Map<string, number>();
-      const pageSize = 2000;
-      let from = 0;
-      let hasMore = true;
-      while (hasMore) {
-        let query: any = client
-          .from('leads2')
-          .select(`${groupByColumn}, datacriacao`);
-        if (view === 'campaign') {
-          if (campaign) {
-            query = query.eq('utm_campaign', campaign);
-          }
-          if (source) {
-            query = query.eq('utm_source', source);
-          }
-        } else if (view === 'source') {
-          if (source) {
-            query = query.eq('utm_source', source);
-          }
-          if (campaign) {
-            query = query.eq('utm_campaign', campaign);
-          }
-        } else {
-          if (campaign) {
-            query = query.eq('utm_campaign', campaign);
-          }
-          if (source) {
-            query = query.eq('utm_source', source);
-          }
-        }
-        if (typeof days === 'number' && days > 0) {
-          const now = new Date();
-          const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-          query = query.gte('datacriacao', start.toISOString());
-        } else {
-          if (startDate) query = query.gte('datacriacao', `${startDate}T00:00:00.000Z`);
-          if (endDate) query = query.lte('datacriacao', `${endDate}T23:59:59.999Z`);
-        }
-        query = query.not(groupByColumn as any, 'is', null).neq(groupByColumn as any, '');
-        query = query.range(from, from + pageSize - 1);
-        const { data, error } = await query;
-        if (error) {
-          throw new Error(error.message);
-        }
-        const rows: any[] = data || [];
-        for (const row of rows) {
-          const name = (row as any)[groupByColumn] ?? '';
-          counts.set(name, (counts.get(name) || 0) + 1);
-        }
-        if (rows.length < pageSize) {
-          hasMore = false;
-        } else {
-          from += pageSize;
-        }
-      }
-      return Array.from(counts.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value);
-    } catch (error) {
-      throw error;
-    }
-  }
 
 
 }

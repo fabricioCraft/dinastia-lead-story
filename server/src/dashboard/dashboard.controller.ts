@@ -8,40 +8,53 @@ import { CampaignSummaryCacheInterceptor } from './campaign-summary-cache.interc
 export class DashboardController {
   constructor(
     private readonly dashboardService: DashboardService
-  ) {}
+  ) { }
 
 
 
   @Get('daily-lead-volume')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600) // 1 hora - cache para dados de agregação@Get('daily-lead-volume')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getDailyLeadVolume(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getDailyLeadVolume(startDate, endDate, daysNumber);
+    return this.dashboardService.getDailyLeadVolume(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
   @Get('scheduling-summary')
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey('scheduling_summary_data')
-  @CacheTTL(3600) // 1 hora - cache para dados de KPIs de agendamento
-  async getSchedulingSummary() {
-    return this.dashboardService.getSchedulingSummary();
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getSchedulingSummary(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getSchedulingSummary(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
   @Get('daily-appointments')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600) // 1 hora - cache para dados de agendamentos diários
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getDailyAppointments(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber);
+    return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
   @Get('appointments-by-person')
@@ -50,9 +63,13 @@ export class DashboardController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getAppointmentsByPerson(startDate, endDate, daysNumber);
+    return this.dashboardService.getAppointmentsByPerson(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
   @Get('appointments-by-person-per-day')
@@ -61,64 +78,109 @@ export class DashboardController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getAppointmentsByPersonPerDay(startDate, endDate, daysNumber);
+    return this.dashboardService.getAppointmentsByPersonPerDay(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
-  
-
   @Get('unified-origin-summary')
-  @CacheTTL(3600) // 1 hour cache
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getUnifiedOriginSummary(
     @Query('days') days?: string,
     @Query('from') from?: string,
-    @Query('to') to?: string
+    @Query('to') to?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ): Promise<UnifiedOriginSummaryData[]> {
     const daysNumber = days ? parseInt(days, 10) : undefined;
+    // Map from/to to startDate/endDate for consistency in service if needed, or keep as is.
+    // Service expects (days, startDate, endDate, filters) or similar?
+    // Checking service signature: getUnifiedOriginSummary(days?: number, startDate?: Date, endDate?: Date)
+    // I should probably update service to accept filters.
     const fromDate = from ? new Date(from) : undefined;
     const toDate = to ? new Date(to) : undefined;
-    
-    return this.dashboardService.getUnifiedOriginSummary(daysNumber, fromDate, toDate);
+
+    return this.dashboardService.getUnifiedOriginSummary(daysNumber, fromDate, toDate, { campaign, source, content, classification });
   }
 
   @Get('leads-by-stage')
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey('leads_by_stage_data')
-  @CacheTTL(3600) // 1 hora - cache para dados de leads por etapa
-  async getLeadsByStage() {
-    return this.dashboardService.getDashboardLeadsByStage();
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getLeadsByStage(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getDashboardLeadsByStage(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
   @Get('leads-by-classification')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600)
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getLeadsByClassification(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
-  ) {
-    const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber);
-  }
-
-  @Get('campaign-drilldown')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600)
-  async getCampaignDrilldown(
-    @Query('viewBy') viewBy?: string,
     @Query('campaign') campaign?: string,
     @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber, { campaign, source, content, classification });
+  }
+
+  @Get('summary-by-campaign')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getSummaryByCampaign(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getCampaignDrilldown(viewBy as any, campaign, source, startDate, endDate, daysNumber);
+    return this.dashboardService.getSummaryByCampaign(startDate, endDate, daysNumber, { campaign, source, content, classification });
   }
 
+  @Get('summary-by-source')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getSummaryBySource(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getSummaryBySource(startDate, endDate, daysNumber, { campaign, source, content, classification });
+  }
 
-
-
-
+  @Get('summary-by-content')
+  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  async getSummaryByContent(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('days') days?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ) {
+    const daysNumber = days ? parseInt(days, 10) : undefined;
+    return this.dashboardService.getSummaryByContent(startDate, endDate, daysNumber, { campaign, source, content, classification });
+  }
 }

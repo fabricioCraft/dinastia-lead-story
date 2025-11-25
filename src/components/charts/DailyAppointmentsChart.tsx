@@ -50,11 +50,13 @@ export function DailyAppointmentsChart() {
   
   // Construir objeto de filtros para o hook
   // Usar formatação local para evitar problemas de fuso horário
+  const cf = filters.categoricalFilters
   const filterParams = filters.selectedPeriod
-    ? { days: filters.selectedPeriod }
+    ? { days: filters.selectedPeriod, ...cf }
     : {
         startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
         endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
+        ...cf,
       };
   
   const { data, isLoading, error } = useDailyAppointments(filterParams);

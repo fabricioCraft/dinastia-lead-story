@@ -2,7 +2,6 @@ import { Sidebar } from "@/components/Sidebar";
 import { KpiCard } from "@/components/KpiCard";
 import { ChapterHeader } from "@/components/ChapterHeader";
 
-import { DrilldownChart } from "@/components/charts/DrilldownChart";
 
 import { DailyLeadVolumeChart } from "@/components/charts/DailyLeadVolumeChart";
 import { DailyAppointmentsChart } from "@/components/charts/DailyAppointmentsChart";
@@ -13,6 +12,10 @@ import { Card } from "@/components/ui/card";
 import DateRangePicker from "@/components/DateRangePicker";
 import { useFilters } from "@/contexts/FilterContext";
 import { LeadClassificationChart } from "@/components/charts/LeadClassificationChart";
+import { CampaignSummaryChart } from "@/components/charts/CampaignSummaryChart";
+import { SourceSummaryChart } from "@/components/charts/SourceSummaryChart";
+import { ContentSummaryChart } from "@/components/charts/ContentSummaryChart";
+import ActiveFilters from "@/components/ActiveFilters";
 
 
 const Index = () => {
@@ -39,6 +42,7 @@ const Index = () => {
                 <DateRangePicker />
               </div>
             </div>
+            <ActiveFilters />
           </div>
 
 
@@ -50,18 +54,28 @@ const Index = () => {
           <section className="space-y-6">
             <ChapterHeader
               number={1}
-              title="De Onde Nossos Leads Vêm?"
-              description="Entenda a origem e distribuição dos seus leads por canal de aquisição"
+              title="Origem dos Leads"
+              description="Resumo agregado por campanha, fonte e conteúdo"
             />
             <div className="grid grid-cols-1 gap-6">
               {/* Gráfico de Volume Diário de Leads */}
               <DailyLeadVolumeChart />
               
-              {/* Gráfico de Origem dos Leads */}
-              <Card className="p-6 card-glow border-border/50">
-                <h4 className="text-md font-semibold text-foreground mb-4">Origem dos Leads</h4>
-                <DrilldownChart />
-              </Card>
+              {/* Visualização consolidada com 3 gráficos UTM */}
+              <div className="grid grid-cols-1 gap-6">
+                <Card className="p-6 card-glow border-border/50">
+                  <h3 className="text-lg font-semibold mb-2">Leads por Campanha</h3>
+                  <CampaignSummaryChart />
+                </Card>
+                <Card className="p-6 card-glow border-border/50">
+                  <h3 className="text-lg font-semibold mb-2">Leads por Fonte</h3>
+                  <SourceSummaryChart />
+                </Card>
+                <Card className="p-6 card-glow border-border/50">
+                  <h3 className="text-lg font-semibold mb-2">Leads por Conteúdo</h3>
+                  <ContentSummaryChart />
+                </Card>
+              </div>
             </div>
 
             <div>
@@ -98,6 +112,8 @@ const Index = () => {
               </div>
             </div>
           </section>
+
+          
 
 
         </div>

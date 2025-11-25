@@ -65,7 +65,7 @@ export class FunnelService {
    * Nova arquitetura: usa histórico de estágios da tabela lead_stage_history
    * Inclui durações em andamento para leads que ainda estão em suas etapas atuais
    */
-  async getTimeInStage(): Promise<TimeInStageItem[]> {
+  async getTimeInStage(days?: number, fromDate?: Date, toDate?: Date, filters?: { campaign?: string; source?: string; content?: string; classification?: string; }): Promise<TimeInStageItem[]> {
     try {
       // Primeiro tenta usar o novo sistema de histórico
       const historyData = await this.leadStageHistoryService.getAverageTimePerStage();
@@ -80,7 +80,7 @@ export class FunnelService {
       
       // Fallback para o sistema baseado em timestamps COM durações em andamento
       console.log('Nenhum dado de histórico encontrado, usando fallback para timestamps com durações em andamento');
-      const timestampData = await this.supabaseService.getAverageTimeInStageWithOngoing();
+      const timestampData = await this.supabaseService.getAverageTimeInStageWithOngoing(days, fromDate, toDate, filters);
       
       return timestampData.map(item => ({
         stage: item.stage_name,

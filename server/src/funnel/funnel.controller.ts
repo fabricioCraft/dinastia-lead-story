@@ -1,4 +1,4 @@
-import { Controller, Get, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, UseInterceptors, Query } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL, CacheKey } from '@nestjs/cache-manager';
 import { FunnelService, StageSummaryItem, TimeInStageItem } from './funnel.service';
 import { SupabaseService } from '../services/supabase.service';
@@ -28,9 +28,20 @@ export class FunnelController {
   @CacheKey('funnel-time-in-stage')
   @CacheTTL(21600) // 6 horas - cache alinhado com sincronização bi-diária (7h e 14h BRT)
   @Get('time-in-stage')
-  async getTimeInStage(): Promise<TimeInStageItem[]> {
+  async getTimeInStage(
+    @Query('days') days?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('campaign') campaign?: string,
+    @Query('source') source?: string,
+    @Query('content') content?: string,
+    @Query('classification') classification?: string,
+  ): Promise<TimeInStageItem[]> {
     try {
-      const data = await this.funnelService.getTimeInStage();
+      const daysNumber = days ? parseInt(days, 10) : undefined;
+      const fromDate = from ? new Date(from) : undefined;
+      const toDate = to ? new Date(to) : undefined;
+      const data = await this.funnelService.getTimeInStage(daysNumber, fromDate, toDate, { campaign, source, content, classification });
       return data;
     } catch (err) {
       console.error('Error in getTimeInStage endpoint:', err);

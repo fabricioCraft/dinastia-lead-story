@@ -187,14 +187,25 @@ export class SupabaseService {
    * Calcula tempo médio por etapa incluindo durações em andamento
    * Implementação expandida para todas as etapas do funil
    */
-  async getAverageTimeInStageWithOngoing(): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
+  async getAverageTimeInStageWithOngoing(days?: number, fromDate?: Date, toDate?: Date, filters?: { campaign?: string; source?: string; content?: string; classification?: string; }): Promise<Array<{ stage_name: string; avg_duration_seconds: number }>> {
     if (!this.client) return [];
     
     try {
       // Buscar todos os dados necessários
-      const { data, error } = await this.client
+      let query = this.client
         .from('leads2')
-        .select('ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada');
+        .select('ts_novos_leads, ts_tentado_conexao, ts_conectado_qualificacao, ts_noshow, ts_reuniao, ts_oportunidade, ts_negociacao, ts_venda_realizada, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead');
+
+      if (typeof days === 'number' && days > 0) {
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        query = query.gte('datacriacao', start.toISOString());
+      } else {
+        if (fromDate) query = query.gte('datacriacao', fromDate.toISOString());
+        if (toDate) query = query.lte('datacriacao', toDate.toISOString());
+      }
+
+      const { data, error } = await query;
       
       if (error) {
         console.error('Erro ao buscar dados para cálculo de duração:', error.message);
@@ -219,7 +230,23 @@ export class SupabaseService {
 
       // Calcular duração para cada etapa
       for (const stage of stages) {
-        const recordsInStage = data.filter(record => record[stage.current] !== null);
+        const recordsInStage = data.filter(record => {
+          if (record[stage.current] === null) return false;
+          const normalizedCampaign = (() => {
+            const val = record.utm_campaign as string | null;
+            if (!val) return null;
+            if (/^DINASTIA \|.*\|.*$/.test(val)) {
+              const parts = val.split('|');
+              return parts[1]?.trim() || val;
+            }
+            return val;
+          })();
+          if (filters?.campaign && normalizedCampaign !== filters.campaign) return false;
+          if (filters?.source && (record.utm_source || '') !== filters.source) return false;
+          if (filters?.content && (record.utm_content || '') !== filters.content) return false;
+          if (filters?.classification && (record.classificacao_do_lead || '').trim() !== filters.classification) return false;
+          return true;
+        });
         
         if (recordsInStage.length === 0) {
           continue; // Pular etapas sem dados

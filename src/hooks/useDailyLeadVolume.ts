@@ -45,6 +45,10 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
       if (typeof filters?.days === 'number' && filters.days > 0) {
         params.append('days', String(filters.days));
       }
+      if ((filters as any)?.campaign) params.append('campaign', (filters as any).campaign);
+      if ((filters as any)?.source) params.append('source', (filters as any).source);
+      if ((filters as any)?.content) params.append('content', (filters as any).content);
+      if ((filters as any)?.classification) params.append('classification', (filters as any).classification);
       
       const url = `/api/dashboard/daily-lead-volume${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);
@@ -57,5 +61,6 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
     refetchInterval: 10 * 60 * 1000, // Refetch a cada 10 minutos
+    refetchOnWindowFocus: false,
   });
 }

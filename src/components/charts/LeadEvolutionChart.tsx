@@ -2,6 +2,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useDailyLeadVolume } from "@/hooks/useDailyLeadVolume";
+import { useFilters } from "@/contexts/FilterContext";
 import { ChartLoadingState, ChartErrorState, ChartEmptyState } from "@/components/ui/chart-states";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -20,7 +21,15 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function LeadEvolutionChart() {
-  const { data: volumeData, isLoading, error } = useDailyLeadVolume();
+  const { filters } = useFilters();
+  const filterParams = filters.selectedPeriod
+    ? { days: filters.selectedPeriod, ...(filters.categoricalFilters || {}) }
+    : {
+        startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+        endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
+        ...(filters.categoricalFilters || {})
+      };
+  const { data: volumeData, isLoading, error } = useDailyLeadVolume(filterParams as any);
 
   // Processar dados para o gráfico
   const chartData = volumeData?.map(item => ({

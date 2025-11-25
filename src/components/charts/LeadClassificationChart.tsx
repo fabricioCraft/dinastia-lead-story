@@ -10,7 +10,7 @@ const COLORS = [
 ]
 
 export function LeadClassificationChart() {
-  const { filters } = useFilters()
+  const { filters, setCategoricalFilter } = useFilters()
   const filterParams = filters.selectedPeriod
     ? { days: filters.selectedPeriod }
     : {
@@ -39,7 +39,7 @@ export function LeadClassificationChart() {
   }
 
   const baseData = (data || [])
-    .filter(item => /^[A-Za-z]$/.test(String(item.classification_name).trim()))
+    .filter(item => item.classification_name)
     .map(item => ({
       name: item.classification_name,
       value: item.lead_count
@@ -61,7 +61,10 @@ export function LeadClassificationChart() {
             <YAxis yAxisId="left" tickLine={false} axisLine={false} allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
             <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
             <Tooltip content={<CustomClassificationTooltip total={total} />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }} />
-            <Bar yAxisId="left" dataKey="value" radius={[6, 6, 0, 0]}>
+            <Bar yAxisId="left" dataKey="value" radius={[6, 6, 0, 0]} onClick={(data) => {
+              const name = (data && (data as any).payload && (data as any).payload.name) || undefined
+              if (name) setCategoricalFilter('classification', String(name))
+            }}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}

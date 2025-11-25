@@ -9,6 +9,12 @@ export interface FilterState {
   // Filtros de período
   selectedPeriod: number | null;
   dateRange: DateRange | null;
+  categoricalFilters: {
+    campaign?: string;
+    source?: string;
+    content?: string;
+    classification?: string;
+  };
 }
 
 interface FilterContextType {
@@ -18,6 +24,9 @@ interface FilterContextType {
   clearAllFilters: () => void;
   getActiveFiltersCount: () => number;
   getFilterParams: () => URLSearchParams;
+  setCategoricalFilter: (category: keyof FilterState['categoricalFilters'], value: string | undefined) => void;
+  clearCategoricalFilter: (category: keyof FilterState['categoricalFilters']) => void;
+  clearAllCategoricalFilters: () => void;
 }
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -30,6 +39,7 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
   const [filters, setFilters] = useState<FilterState>({
     selectedPeriod: null,
     dateRange: null,
+    categoricalFilters: {}
   });
 
   const setSelectedPeriod = (days: number | null) => {
@@ -51,12 +61,39 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     }));
   };
 
+  const setCategoricalFilter = (category: keyof FilterState['categoricalFilters'], value: string | undefined) => {
+    setFilters(prev => ({
+      ...prev,
+      categoricalFilters: {
+        ...prev.categoricalFilters,
+        [category]: value
+      }
+    }));
+  };
+
+  const clearCategoricalFilter = (category: keyof FilterState['categoricalFilters']) => {
+    setFilters(prev => ({
+      ...prev,
+      categoricalFilters: {
+        ...prev.categoricalFilters,
+        [category]: undefined
+      }
+    }));
+  };
+
+  const clearAllCategoricalFilters = () => {
+    setFilters(prev => ({
+      ...prev,
+      categoricalFilters: {}
+    }));
+  };
 
 
   const clearAllFilters = () => {
     setFilters({
       selectedPeriod: null,
       dateRange: null,
+      categoricalFilters: {}
     });
   };
 
@@ -65,6 +102,11 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     
     if (filters.selectedPeriod) count++;
     if (filters.dateRange?.from && filters.dateRange?.to) count++;
+    const cf = filters.categoricalFilters;
+    if (cf.campaign) count++;
+    if (cf.source) count++;
+    if (cf.content) count++;
+    if (cf.classification) count++;
     
     return count;
   };
@@ -79,6 +121,11 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
       params.append('from', filters.dateRange.from.toISOString());
       params.append('to', filters.dateRange.to.toISOString());
     }
+    const cf = filters.categoricalFilters;
+    if (cf.campaign) params.append('campaign', cf.campaign);
+    if (cf.source) params.append('source', cf.source);
+    if (cf.content) params.append('content', cf.content);
+    if (cf.classification) params.append('classification', cf.classification);
     
     return params;
   };
@@ -91,6 +138,9 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
       clearAllFilters,
       getActiveFiltersCount,
       getFilterParams,
+      setCategoricalFilter,
+      clearCategoricalFilter,
+      clearAllCategoricalFilters,
     }}>
       {children}
     </FilterContext.Provider>
