@@ -13,7 +13,7 @@ export class DashboardController {
 
 
   @Get('daily-lead-volume')
-  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  // @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getDailyLeadVolume(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -140,7 +140,7 @@ export class DashboardController {
   }
 
   @Get('summary-by-campaign')
-  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  // @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getSummaryByCampaign(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -155,7 +155,7 @@ export class DashboardController {
   }
 
   @Get('summary-by-source')
-  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  // @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getSummaryBySource(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -170,7 +170,7 @@ export class DashboardController {
   }
 
   @Get('summary-by-content')
-  @UseInterceptors(CampaignSummaryCacheInterceptor)
+  // @UseInterceptors(CampaignSummaryCacheInterceptor)
   async getSummaryByContent(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,

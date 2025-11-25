@@ -9,6 +9,10 @@ export interface DailyLeadVolumeFilters {
   startDate?: string;
   endDate?: string;
   days?: number;
+  campaign?: string;
+  source?: string;
+  content?: string;
+  classification?: string;
 }
 
 /**
@@ -33,15 +37,15 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
     queryKey: ['daily-lead-volume', filters],
     queryFn: async () => {
       const params = new URLSearchParams();
-      
+
       if (filters?.startDate) {
         params.append('startDate', filters.startDate);
       }
-      
+
       if (filters?.endDate) {
         params.append('endDate', filters.endDate);
       }
-      
+
       if (typeof filters?.days === 'number' && filters.days > 0) {
         params.append('days', String(filters.days));
       }
@@ -49,14 +53,15 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
       if ((filters as any)?.source) params.append('source', (filters as any).source);
       if ((filters as any)?.content) params.append('content', (filters as any).content);
       if ((filters as any)?.classification) params.append('classification', (filters as any).classification);
-      
+      if ((filters as any)?.origin) params.append('origin', (filters as any).origin);
+
       const url = `/api/dashboard/daily-lead-volume${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados de volume diário: ${response.status}`);
       }
-      
+
       return response.json();
     },
     staleTime: 5 * 60 * 1000, // 5 minutos

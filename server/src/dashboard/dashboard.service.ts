@@ -71,6 +71,7 @@ export interface DashboardFilters {
   source?: string;
   content?: string;
   classification?: string;
+  origin?: string;
 }
 
 @Injectable()
@@ -117,6 +118,30 @@ export class DashboardService {
       }
       if (filters.classification) {
         whereClauses.push(`classificacao_do_lead = '${filters.classification}'`);
+      }
+      if (filters.origin) {
+        whereClauses.push(`(
+          CASE
+            WHEN origem ILIKE '%ISCA SCOPELINE%' THEN 'Isca Scopeline'
+            WHEN origem ILIKE '%ISCA HORMOZI%' THEN 'Isca Hormozi'
+            WHEN origem ILIKE '%MASTERCLASS%' THEN 'Masterclass'
+            WHEN origem ILIKE '%MANYCHAT%' THEN 'Manychat'
+            WHEN origem ILIKE '%STARTER10K%' THEN 'Starter10k'
+            WHEN origem ILIKE '%AGENDAMENTO%' THEN 'Agendamento'
+            WHEN origem ILIKE '%DESAFIO%' THEN 'Desafio'
+            WHEN origem ILIKE '%YOUTUBE%' OR origem ILIKE '%YT-%' THEN 'YouTube'
+            WHEN origem ILIKE '%CALENDLY%' THEN 'Calendly'
+            WHEN origem ILIKE '%VENDA%' THEN 'Venda'
+            WHEN origem ILIKE '%GOOGLE ADS%' OR origem ILIKE '%GOOGLE%' THEN 'Google Ads'
+            WHEN origem ILIKE '%FACEBOOK%' OR origem ILIKE '%META%' THEN 'Facebook Ads'
+            WHEN origem ILIKE '%INSTAGRAM%' OR origem ILIKE '%IG%' THEN 'Instagram'
+            WHEN origem ILIKE '%TIKTOK%' THEN 'TikTok'
+            WHEN origem ILIKE '%LINKEDIN%' THEN 'LinkedIn'
+            WHEN origem ILIKE '%EMAIL%' THEN 'Email Marketing'
+            WHEN origem ILIKE '%WHATSAPP%' THEN 'WhatsApp'
+            ELSE 'Outros'
+          END
+        ) = '${filters.origin}'`);
       }
     }
 
@@ -246,7 +271,7 @@ export class DashboardService {
     while (hasMore) {
       let query: any = client
         .from('leads2')
-        .select(`${column}, datacriacao`);
+        .select(`${column}, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead`);
       if (typeof days === 'number' && days > 0) {
         const now = new Date();
         const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -263,6 +288,22 @@ export class DashboardService {
       }
       const rows: any[] = data || [];
       for (const row of rows) {
+        // Aplicar filtros manualmente no fallback
+        if (filters) {
+          if (filters.source && row.utm_source !== filters.source) continue;
+          if (filters.content && row.utm_content !== filters.content) continue;
+          if (filters.classification && row.classificacao_do_lead !== filters.classification) continue;
+
+          if (filters.campaign) {
+            let camp = row.utm_campaign || '';
+            if (camp && typeof camp === 'string' && camp.toUpperCase().startsWith('DINASTIA |') && camp.split('|').length >= 3) {
+              const parts = camp.split('|');
+              if (parts.length >= 2) camp = parts[1].trim();
+            }
+            if (camp !== filters.campaign) continue;
+          }
+        }
+
         let name = (row as any)[column] ?? '';
 
         // Normalização no fallback para campanhas
@@ -452,7 +493,7 @@ export class DashboardService {
       // Tentar usar execute_sql primeiro
       try {
         const { data, error } = await client.rpc('execute_sql', { query: sqlQuery });
-        
+
         if (!error && data) {
           this.logger.log(`Query SQL retornou ${data.length} registros de volume diário`);
           return data;
@@ -1157,7 +1198,7 @@ export class DashboardService {
             query = query.lte('datacriacao', toDate.toISOString());
           }
         }
-        
+
         query = query.range(from, from + pageSize - 1);
 
         const { data, error } = await query;

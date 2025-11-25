@@ -11,11 +11,13 @@ const COLORS = [
 
 export function LeadClassificationChart() {
   const { filters, setCategoricalFilter } = useFilters()
+  const cf = filters.categoricalFilters
   const filterParams = filters.selectedPeriod
-    ? { days: filters.selectedPeriod }
+    ? { days: filters.selectedPeriod, ...cf }
     : {
         startDate: filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
         endDate: filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
+        ...cf,
       }
   const { data, isLoading, error } = useLeadClassification(filterParams)
 

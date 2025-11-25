@@ -14,6 +14,7 @@ export interface FilterState {
     source?: string;
     content?: string;
     classification?: string;
+    origin?: string;
   };
 }
 
@@ -107,6 +108,7 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     if (cf.source) count++;
     if (cf.content) count++;
     if (cf.classification) count++;
+    if (cf.origin) count++;
     
     return count;
   };
@@ -126,6 +128,7 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     if (cf.source) params.append('source', cf.source);
     if (cf.content) params.append('content', cf.content);
     if (cf.classification) params.append('classification', cf.classification);
+    if (cf.origin) params.append('origin', cf.origin);
     
     return params;
   };

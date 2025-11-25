@@ -208,7 +208,7 @@ export function UnifiedOriginChart({ threshold = 10 }: UnifiedOriginChartProps) 
               fill="#3B82F6"
               onClick={(props) => {
                 const origem = (props as any)?.payload?.origemCompleta;
-                if (origem) setCategoricalFilter('source', origem);
+                if (origem) setCategoricalFilter('origin', origem);
               }}
             />
           </BarChart>

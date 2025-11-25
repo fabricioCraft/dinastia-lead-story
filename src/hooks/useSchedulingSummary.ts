@@ -32,6 +32,7 @@ export function useSchedulingSummary() {
       if (cf.source) params.append('source', cf.source);
       if (cf.content) params.append('content', cf.content);
       if (cf.classification) params.append('classification', cf.classification);
+      if (cf.origin) params.append('origin', cf.origin);
 
       const url = `/api/dashboard/scheduling-summary${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);
