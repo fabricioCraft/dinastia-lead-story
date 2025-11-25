@@ -72,6 +72,7 @@ export interface DashboardFilters {
   content?: string;
   classification?: string;
   origin?: string;
+  scheduler?: string;
 }
 
 @Injectable()
@@ -142,6 +143,9 @@ export class DashboardService {
             ELSE 'Outros'
           END
         ) = '${filters.origin}'`);
+      }
+      if (filters.scheduler) {
+        whereClauses.push(`agendado_por = '${filters.scheduler}'`);
       }
     }
 
@@ -271,7 +275,7 @@ export class DashboardService {
     while (hasMore) {
       let query: any = client
         .from('leads2')
-        .select(`${column}, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead`);
+        .select(`${column}, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por`);
       if (typeof days === 'number' && days > 0) {
         const now = new Date();
         const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -293,6 +297,7 @@ export class DashboardService {
           if (filters.source && row.utm_source !== filters.source) continue;
           if (filters.content && row.utm_content !== filters.content) continue;
           if (filters.classification && row.classificacao_do_lead !== filters.classification) continue;
+          if (filters.scheduler && row.agendado_por !== filters.scheduler) continue;
 
           if (filters.campaign) {
             let camp = row.utm_campaign || '';
@@ -371,12 +376,13 @@ export class DashboardService {
     filters?: DashboardFilters
   ): Promise<DailyLeadVolumeData[]> {
     try {
-      this.logger.log('Buscando dados de volume diário de leads com filtros');
+      this.logger.log(`Buscando dados de volume diário de leads com filtros: ${JSON.stringify(filters)}, days: ${days}, start: ${startDate}, end: ${endDate}`);
 
       const client = this.supabaseService.getClient();
       if (!client) throw new Error('Cliente Supabase não inicializado');
 
       const whereSql = this.buildWhereClause(startDate, endDate, days, filters);
+      this.logger.log(`Generated WHERE clause: ${whereSql}`);
 
       const sql = `
         SELECT 
@@ -391,9 +397,12 @@ export class DashboardService {
           day ASC
       `;
 
+      this.logger.log(`Executing SQL: ${sql}`);
+
       const { data, error } = await client.rpc('execute_sql', { query: sql });
 
       if (!error && data) {
+        this.logger.log(`Daily Volume Data found: ${data.length} rows`);
         return (data || []).map((row: any) => ({
           day: row.day,
           total_leads_per_day: parseInt(row.total_leads_per_day, 10)
@@ -539,7 +548,7 @@ export class DashboardService {
       while (hasMore) {
         let query = client
           .from('leads2')
-          .select('datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead')
+          .select('datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por')
           .not('datacriacao', 'is', null);
 
         if (typeof days === 'number' && days > 0) {
@@ -595,6 +604,7 @@ export class DashboardService {
         if (filters?.source && (lead.utm_source || '') !== filters.source) return;
         if (filters?.content && (lead.utm_content || '') !== filters.content) return;
         if (filters?.classification && (lead.classificacao_do_lead || '').trim() !== filters.classification) return;
+        if (filters?.scheduler && (lead.agendado_por || '') !== filters.scheduler) return;
 
         const date = new Date(lead.datacriacao);
         const day = date.toISOString().split('T')[0];
@@ -914,7 +924,7 @@ export class DashboardService {
       // Buscar agendamentos da tabela leads2
       const { data: leads2Data, error: leads2Error } = await client
         .from('leads2')
-        .select('data_do_agendamento, utm_campaign, utm_source, utm_content, classificacao_do_lead')
+        .select('data_do_agendamento, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por')
         .not('data_do_agendamento', 'is', null)
         .neq('data_do_agendamento', '')
         .order('data_do_agendamento', { ascending: true })
@@ -953,6 +963,7 @@ export class DashboardService {
         if (filters?.source && (appointment.utm_source || '') !== filters.source) return;
         if (filters?.content && (appointment.utm_content || '') !== filters.content) return;
         if (filters?.classification && (appointment.classificacao_do_lead || '').trim() !== filters.classification) return;
+        if (filters?.scheduler && (appointment.agendado_por || '') !== filters.scheduler) return;
         try {
           const dateStr = appointment.data_do_agendamento;
           if (!dateStr) { invalidDatesCount++; return; }
@@ -1363,7 +1374,7 @@ export class DashboardService {
       // Fallback: buscar e processar manualmente com paginação
       this.logger.warn('RPC para classificação de leads falhou, usando fallback manual com paginação.');
 
-      const allItems: { classificacao_do_lead: string | null; utm_campaign?: string | null; utm_source?: string | null; utm_content?: string | null }[] = [];
+      const allItems: { classificacao_do_lead: string | null; utm_campaign?: string | null; utm_source?: string | null; utm_content?: string | null; agendado_por?: string | null }[] = [];
       let from = 0;
       const pageSize = 1000;
       let hasMore = true;
@@ -1371,7 +1382,7 @@ export class DashboardService {
       while (hasMore) {
         let fallbackQuery = client
           .from('leads2')
-          .select('classificacao_do_lead, datacriacao, utm_campaign, utm_source, utm_content');
+          .select('classificacao_do_lead, datacriacao, utm_campaign, utm_source, utm_content, agendado_por');
 
         if (days && days > 0) {
           const startDate = new Date();
@@ -1422,6 +1433,7 @@ export class DashboardService {
         if (filters?.source && (item.utm_source || '') !== filters.source) return;
         if (filters?.content && (item.utm_content || '') !== filters.content) return;
         if (filters?.classification && classification !== filters.classification) return;
+        if (filters?.scheduler && (item.agendado_por || '') !== filters.scheduler) return;
 
         counts.set(classification, (counts.get(classification) || 0) + 1);
       });

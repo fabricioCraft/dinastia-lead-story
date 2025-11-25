@@ -15,6 +15,7 @@ export interface FilterState {
     content?: string;
     classification?: string;
     origin?: string;
+    scheduler?: string;
   };
 }
 
@@ -100,7 +101,7 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
 
   const getActiveFiltersCount = () => {
     let count = 0;
-    
+
     if (filters.selectedPeriod) count++;
     if (filters.dateRange?.from && filters.dateRange?.to) count++;
     const cf = filters.categoricalFilters;
@@ -109,13 +110,14 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     if (cf.content) count++;
     if (cf.classification) count++;
     if (cf.origin) count++;
-    
+    if (cf.scheduler) count++;
+
     return count;
   };
 
   const getFilterParams = () => {
     const params = new URLSearchParams();
-    
+
     // Período ou range de datas
     if (filters.selectedPeriod) {
       params.append('days', filters.selectedPeriod.toString());
@@ -129,7 +131,8 @@ export const FilterProvider = ({ children }: FilterProviderProps) => {
     if (cf.content) params.append('content', cf.content);
     if (cf.classification) params.append('classification', cf.classification);
     if (cf.origin) params.append('origin', cf.origin);
-    
+    if (cf.scheduler) params.append('scheduler', cf.scheduler);
+
     return params;
   };
 

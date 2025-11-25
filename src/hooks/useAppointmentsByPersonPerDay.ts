@@ -23,9 +23,11 @@ export function useAppointmentsByPersonPerDay(targetDate?: Date) {
       if (cf.campaign) params.append('campaign', cf.campaign)
       if (cf.source) params.append('source', cf.source)
       if (cf.content) params.append('content', cf.content)
-      if (cf.classification) params.append('classification', cf.classification)
+      if (cf?.classification) params.append('classification', cf.classification)
+      if (cf?.origin) params.append('origin', cf.origin)
+      if (cf?.scheduler) params.append('scheduler', cf.scheduler)
 
-      const url = `/api/dashboard/appointments-by-person-per-day?${params.toString()}`
+      const url = `/api/dashboard/appointments-by-person-per-day${params.toString() ? `?${params.toString()}` : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`Failed to fetch appointments by person per day: ${res.status}`)
       return res.json()

@@ -22,9 +22,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getDailyLeadVolume(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getDailyLeadVolume(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('scheduling-summary')
@@ -37,9 +39,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getSchedulingSummary(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getSchedulingSummary(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('daily-appointments')
@@ -52,9 +56,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getDailyAppointments(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('appointments-by-person')
@@ -67,9 +73,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getAppointmentsByPerson(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getAppointmentsByPerson(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('appointments-by-person-per-day')
@@ -82,9 +90,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getAppointmentsByPersonPerDay(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getAppointmentsByPersonPerDay(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('unified-origin-summary')
@@ -97,16 +107,14 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ): Promise<UnifiedOriginSummaryData[]> {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    // Map from/to to startDate/endDate for consistency in service if needed, or keep as is.
-    // Service expects (days, startDate, endDate, filters) or similar?
-    // Checking service signature: getUnifiedOriginSummary(days?: number, startDate?: Date, endDate?: Date)
-    // I should probably update service to accept filters.
     const fromDate = from ? new Date(from) : undefined;
     const toDate = to ? new Date(to) : undefined;
 
-    return this.dashboardService.getUnifiedOriginSummary(daysNumber, fromDate, toDate, { campaign, source, content, classification });
+    return this.dashboardService.getUnifiedOriginSummary(daysNumber, fromDate, toDate, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('leads-by-stage')
@@ -119,9 +127,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getDashboardLeadsByStage(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getDashboardLeadsByStage(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('leads-by-classification')
@@ -134,9 +144,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getLeadsByClassification(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('summary-by-campaign')
@@ -149,9 +161,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getSummaryByCampaign(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getSummaryByCampaign(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('summary-by-source')
@@ -164,9 +178,11 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getSummaryBySource(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getSummaryBySource(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 
   @Get('summary-by-content')
@@ -179,8 +195,10 @@ export class DashboardController {
     @Query('source') source?: string,
     @Query('content') content?: string,
     @Query('classification') classification?: string,
+    @Query('origin') origin?: string,
+    @Query('scheduler') scheduler?: string,
   ) {
     const daysNumber = days ? parseInt(days, 10) : undefined;
-    return this.dashboardService.getSummaryByContent(startDate, endDate, daysNumber, { campaign, source, content, classification });
+    return this.dashboardService.getSummaryByContent(startDate, endDate, daysNumber, { campaign, source, content, classification, origin, scheduler });
   }
 }

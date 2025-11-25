@@ -13,6 +13,8 @@ export default function ActiveFilters() {
     cf.source ? { key: 'source', label: 'Fonte', value: cf.source } : null,
     cf.content ? { key: 'content', label: 'Conteúdo', value: cf.content } : null,
     cf.classification ? { key: 'classification', label: 'Classificação', value: cf.classification } : null,
+    cf.origin ? { key: 'origin', label: 'Origem', value: cf.origin } : null,
+    cf.scheduler ? { key: 'scheduler', label: 'Agendador', value: cf.scheduler } : null,
   ].filter(Boolean) as Array<{ key: keyof typeof cf; label: string; value: string }>
 
   if (items.length === 0) {

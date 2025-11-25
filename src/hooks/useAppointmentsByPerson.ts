@@ -27,6 +27,8 @@ export function useAppointmentsByPerson() {
       if (cf?.source) params.append('source', cf.source)
       if (cf?.content) params.append('content', cf.content)
       if (cf?.classification) params.append('classification', cf.classification)
+      if (cf?.origin) params.append('origin', cf.origin)
+      if (cf?.scheduler) params.append('scheduler', cf.scheduler)
       const url = `/api/dashboard/appointments-by-person${params.toString() ? `?${params.toString()}` : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`Failed to fetch appointments by person: ${res.status}`)

@@ -34,6 +34,7 @@ export function useLeadsByStage() {
       if (cf.content) params.append('content', cf.content);
       if (cf.classification) params.append('classification', cf.classification);
       if (cf.origin) params.append('origin', cf.origin);
+      if (cf.scheduler) params.append('scheduler', cf.scheduler);
 
       const url = `/api/dashboard/leads-by-stage${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);

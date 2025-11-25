@@ -10,11 +10,11 @@ export class CampaignSummaryCacheInterceptor implements NestInterceptor {
 
   async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest();
-    const { startDate, endDate, campaign, source, content, classification } = request.query;
+    const { startDate, endDate, campaign, source, content, classification, origin, scheduler } = request.query;
     const endpoint = (request.originalUrl || request.url || '').toString().split('?')[0] || 'unknown';
 
     // Gerar chave de cache baseada nos parâmetros de data e filtros
-    const cacheKey = this.generateCacheKey(startDate, endDate, endpoint, { campaign, source, content, classification });
+    const cacheKey = this.generateCacheKey(startDate, endDate, endpoint, { campaign, source, content, classification, origin, scheduler });
 
     // Tentar buscar do cache
     const cachedResult = await this.cacheManager.get(cacheKey);
@@ -36,7 +36,7 @@ export class CampaignSummaryCacheInterceptor implements NestInterceptor {
     startDate?: string,
     endDate?: string,
     endpoint?: string,
-    filters?: { campaign?: string; source?: string; content?: string; classification?: string }
+    filters?: { campaign?: string; source?: string; content?: string; classification?: string; origin?: string; scheduler?: string }
   ): string {
     // Normalizar datas para garantir consistência no cache
     const start = startDate ? new Date(startDate).toISOString().split('T')[0] : 'default';
@@ -49,6 +49,8 @@ export class CampaignSummaryCacheInterceptor implements NestInterceptor {
     if (filters?.source) filterParts.push(`s:${filters.source}`);
     if (filters?.content) filterParts.push(`ct:${filters.content}`);
     if (filters?.classification) filterParts.push(`cl:${filters.classification}`);
+    if (filters?.origin) filterParts.push(`o:${filters.origin}`);
+    if (filters?.scheduler) filterParts.push(`sc:${filters.scheduler}`);
 
     const filterSuffix = filterParts.length > 0 ? `_${filterParts.join('_')}` : '';
 

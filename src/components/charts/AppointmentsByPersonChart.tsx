@@ -38,7 +38,7 @@ const AppointmentsByPersonSkeleton = () => (
 
 export function AppointmentsByPersonChart() {
   const { data, isLoading, error } = useAppointmentsByPerson()
-  const { filters } = useFilters()
+  const { filters, setCategoricalFilter } = useFilters()
   const teamMembers = useMemo(() => {
     return Array.from(new Set((data || []).map(item => item.agendado_por))).sort((a, b) => a.localeCompare(b))
   }, [data])
@@ -180,7 +180,7 @@ export function AppointmentsByPersonChart() {
     }
   })()
 
-  
+
 
   return (
     <div className="space-y-6">
@@ -212,6 +212,11 @@ export function AppointmentsByPersonChart() {
                   dataKey={member}
                   stackId="a"
                   fill={colors[index]}
+                  onClick={() => filters.categoricalFilters.scheduler === member
+                    ? setCategoricalFilter('scheduler', undefined)
+                    : setCategoricalFilter('scheduler', member)
+                  }
+                  cursor="pointer"
                 />
               ))}
             </BarChart>

@@ -54,6 +54,7 @@ export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
       if ((filters as any)?.content) params.append('content', (filters as any).content);
       if ((filters as any)?.classification) params.append('classification', (filters as any).classification);
       if ((filters as any)?.origin) params.append('origin', (filters as any).origin);
+      if ((filters as any)?.scheduler) params.append('scheduler', (filters as any).scheduler);
 
       const url = `/api/dashboard/daily-lead-volume${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await fetch(url);
