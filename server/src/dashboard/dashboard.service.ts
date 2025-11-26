@@ -112,13 +112,13 @@ export class DashboardService {
         `);
       }
       if (filters.source) {
-        whereClauses.push(`utm_source = '${filters.source}'`);
+        whereClauses.push(`TRIM(utm_source) = '${filters.source}'`);
       }
       if (filters.content) {
-        whereClauses.push(`utm_content = '${filters.content}'`);
+        whereClauses.push(`TRIM(utm_content) = '${filters.content}'`);
       }
       if (filters.classification) {
-        whereClauses.push(`classificacao_do_lead = '${filters.classification}'`);
+        whereClauses.push(`TRIM(classificacao_do_lead) = '${filters.classification}'`);
       }
       if (filters.origin) {
         whereClauses.push(`(
@@ -601,8 +601,8 @@ export class DashboardService {
       allLeads2Data.forEach((lead: any) => {
         const normalizedCampaign = normalizeCampaign(lead.utm_campaign);
         if (filters?.campaign && normalizedCampaign !== filters.campaign) return;
-        if (filters?.source && (lead.utm_source || '') !== filters.source) return;
-        if (filters?.content && (lead.utm_content || '') !== filters.content) return;
+        if (filters?.source && (String(lead.utm_source || '').trim()) !== String(filters.source).trim()) return;
+        if (filters?.content && (String(lead.utm_content || '').trim()) !== String(filters.content).trim()) return;
         if (filters?.classification && (lead.classificacao_do_lead || '').trim() !== filters.classification) return;
         if (filters?.scheduler && (lead.agendado_por || '') !== filters.scheduler) return;
 

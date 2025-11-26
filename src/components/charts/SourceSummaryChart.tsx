@@ -64,10 +64,30 @@ export function SourceSummaryChart() {
             width={processed.yAxisWidth}
             interval={0}
           />
-          <Tooltip 
-            content={<CustomUTMTooltip total={processed.total} title="Fonte" />}
-            cursor={{ fill: 'hsl(var(--muted))', opacity: 0.12 }}
-          />
+          {(() => {
+            const ClickableCursor = (props: any) => {
+              const ap = (props && (props as any).payload) || (props && (props as any).activePayload)
+              const name = ap?.[0]?.payload?.fullName
+              const { x, y, width, height } = props as any
+              return (
+                <rect
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  fill={'hsl(var(--muted))'}
+                  opacity={0.12}
+                  onClick={() => { if (name) setCategoricalFilter('source', name) }}
+                />
+              )
+            }
+            return (
+              <Tooltip 
+                content={<CustomUTMTooltip total={processed.total} title="Fonte" />}
+                cursor={<ClickableCursor />}
+              />
+            )
+          })()}
           <Bar dataKey="value" radius={[0, 4, 4, 0]} onClick={(data) => {
             const name = (data && (data as any).payload && (data as any).payload.fullName) || undefined
             if (name) setCategoricalFilter('source', name)

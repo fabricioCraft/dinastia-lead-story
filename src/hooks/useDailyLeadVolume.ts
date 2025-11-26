@@ -13,6 +13,8 @@ export interface DailyLeadVolumeFilters {
   source?: string;
   content?: string;
   classification?: string;
+  origin?: string;
+  scheduler?: string;
 }
 
 /**
@@ -34,7 +36,18 @@ export interface DailyLeadVolumeFilters {
  */
 export function useDailyLeadVolume(filters?: DailyLeadVolumeFilters) {
   return useQuery<DailyLeadVolumeData[]>({
-    queryKey: ['daily-lead-volume', filters],
+    queryKey: [
+      'daily-lead-volume',
+      filters?.days || null,
+      filters?.startDate || null,
+      filters?.endDate || null,
+      filters?.campaign || null,
+      filters?.source || null,
+      filters?.content || null,
+      filters?.classification || null,
+      filters?.origin || null,
+      filters?.scheduler || null,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams();
 

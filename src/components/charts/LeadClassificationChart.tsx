@@ -62,7 +62,27 @@ export function LeadClassificationChart() {
             <XAxis dataKey="name" tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
             <YAxis yAxisId="left" tickLine={false} axisLine={false} allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
             <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-            <Tooltip content={<CustomClassificationTooltip total={total} />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }} />
+            {(() => {
+              const ClickableCursor = (props: any) => {
+                const ap = (props && (props as any).payload) || (props && (props as any).activePayload)
+                const name = ap?.[0]?.payload?.name
+                const { x, y, width, height } = props as any
+                return (
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    fill={'hsl(var(--muted))'}
+                    opacity={0.2}
+                    onClick={() => { if (name) setCategoricalFilter('classification', String(name)) }}
+                  />
+                )
+              }
+              return (
+                <Tooltip content={<CustomClassificationTooltip total={total} />} cursor={<ClickableCursor />} />
+              )
+            })()}
             <Bar yAxisId="left" dataKey="value" radius={[6, 6, 0, 0]} onClick={(data) => {
               const name = (data && (data as any).payload && (data as any).payload.name) || undefined
               if (name) setCategoricalFilter('classification', String(name))
