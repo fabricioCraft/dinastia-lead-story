@@ -153,45 +153,52 @@ export class DashboardService {
   }
 
   async getOriginSummary(days?: number) {
-    // Usar dados diretamente da tabela leads2 do Supabase
+    // Usar dados diretamente da tabela leads2 do Supabase com paginação
     try {
       const client = this.supabaseService.getClient();
       if (!client) {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Calcular período se especificado
-      let query = client
-        .from('leads2')
-        .select('origem')
-        .not('origem', 'is', null)
-        .neq('origem', '');
-
-      if (days) {
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-        query = query.gte('datacriacao', startDate.toISOString());
-      }
-
-      // Adicionar limite alto para buscar todos os registros
-      query = query.limit(50000);
-
-      const { data, error } = await query;
-
-      if (error) {
-        this.logger.error('Erro ao buscar dados de origem:', error);
-        throw new Error(`Erro na consulta: ${error.message}`);
-      }
-
-      // Processar dados para agrupar por origem
       const originCounts = new Map<string, number>();
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      data?.forEach(lead => {
-        if (lead.origem) {
-          originCounts.set(lead.origem, (originCounts.get(lead.origem) || 0) + 1);
+      while (hasMore) {
+        let query = client
+          .from('leads2')
+          .select('origem, datacriacao')
+          .not('origem', 'is', null)
+          .neq('origem', '')
+          .range(from, from + pageSize - 1);
+
+        if (days) {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - days);
+          query = query.gte('datacriacao', startDate.toISOString());
         }
-      });
 
+        const { data, error } = await query;
+        if (error) {
+          this.logger.error('Erro ao buscar dados de origem:', error);
+          throw new Error(`Erro na consulta: ${error.message}`);
+        }
+
+        if (data && data.length > 0) {
+          data.forEach(lead => {
+            if (lead.origem) {
+              originCounts.set(lead.origem, (originCounts.get(lead.origem) || 0) + 1);
+            }
+          });
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const totalLeads = Array.from(originCounts.values()).reduce((s, v) => s + v, 0);
       const leadsByOrigin = Array.from(originCounts.entries()).map(([origin, count]) => ({
         origin_name: origin,
         lead_count: count
@@ -199,12 +206,12 @@ export class DashboardService {
 
       return {
         kpis: {
-          totalLeads: data?.length || 0,
+          totalLeads,
           totalOrigins: originCounts.size,
-          totalCampaigns: 0 // Não há campanhas na tabela leads2
+          totalCampaigns: 0
         },
         leadsByOrigin,
-        leadsByCampaign: [] // Não há campanhas na tabela leads2
+        leadsByCampaign: []
       };
     } catch (error) {
       this.logger.error('Erro ao obter resumo de origem:', error);
@@ -942,20 +949,35 @@ export class DashboardService {
         throw new Error('Cliente Supabase não inicializado');
       }
 
-      // Buscar agendamentos da tabela leads2
-      const { data: leads2Data, error: leads2Error } = await client
-        .from('leads2')
-        .select('data_do_agendamento, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por')
-        .not('data_do_agendamento', 'is', null)
-        .neq('data_do_agendamento', '')
-        .order('data_do_agendamento', { ascending: true })
-        .limit(10000);
+      // Paginar agendamentos da tabela leads2 para evitar limites
+      const leads2Data: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        let q = client
+          .from('leads2')
+          .select('data_do_agendamento, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por')
+          .not('data_do_agendamento', 'is', null)
+          .neq('data_do_agendamento', '')
+          .order('data_do_agendamento', { ascending: true })
+          .range(from, from + pageSize - 1);
 
-      if (leads2Error) {
-        this.logger.error('Erro ao buscar leads2 no fallback:', leads2Error);
+        const { data: page, error: pageErr } = await q;
+        if (pageErr) {
+          this.logger.error('Erro ao buscar leads2 no fallback:', pageErr);
+          break;
+        }
+        if (page && page.length > 0) {
+          leads2Data.push(...page);
+          from += pageSize;
+          hasMore = page.length === pageSize;
+        } else {
+          hasMore = false;
+        }
       }
 
-      const totalRecords = (leads2Data?.length || 0);
+      const totalRecords = leads2Data.length;
       if (totalRecords === 0) {
         this.logger.warn('Nenhum dado de agendamentos encontrado no fallback');
         return [];
