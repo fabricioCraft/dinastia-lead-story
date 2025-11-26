@@ -12,6 +12,16 @@ export function ContentSummaryChart() {
   const { setCategoricalFilter } = useFilters()
 
   const isMobile = useMemo(() => typeof window !== 'undefined' && window.innerWidth < 768, [])
+  const wrap = (v: any) => {
+    const s = String(v ?? '')
+    const limit = isMobile ? 28 : 40
+    if (s.length <= limit) return s
+    const sep = s.indexOf(' | ')
+    if (sep > 0 && sep <= limit + 6) return `${s.slice(0, sep + 3)}\n${s.slice(sep + 3)}`
+    const idx = s.lastIndexOf(' ', limit)
+    const split = idx > 0 ? idx : limit
+    return `${s.slice(0, split)}\n${s.slice(split)}`
+  }
   const processed = useMemo(() => {
     const items = (data || [])
     const total = items.reduce((s, d) => s + d.value, 0)
@@ -26,7 +36,7 @@ export function ContentSummaryChart() {
     const basePad = isMobile ? 24 : 40
     const minW = isMobile ? 160 : 320
     const yAxisWidth = Math.max(minW, basePad + longest * charW)
-    const chartHeight = Math.max(360, chartData.length * 36)
+    const chartHeight = Math.max(360, chartData.length * (isMobile ? 40 : 44))
     return { chartData, total, yAxisWidth, chartHeight }
   }, [data, isMobile])
 
@@ -49,7 +59,7 @@ export function ContentSummaryChart() {
     <div className="w-full">
       <div style={{ height: processed.chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 0, bottom: 20 }}>
+          <BarChart data={processed.chartData} layout="vertical" margin={{ top: 20, right: 60, left: 12, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
           <XAxis 
             type="number"
@@ -63,6 +73,7 @@ export function ContentSummaryChart() {
             stroke="hsl(var(--muted-foreground))"
             width={processed.yAxisWidth}
             interval={0}
+            tickFormatter={wrap}
           />
           {(() => {
             const ClickableCursor = (props: any) => {
