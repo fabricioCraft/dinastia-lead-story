@@ -12,6 +12,12 @@ export function ContentSummaryChart() {
   const { setCategoricalFilter } = useFilters()
 
   const isMobile = useMemo(() => typeof window !== 'undefined' && window.innerWidth < 768, [])
+  const colorFor = (v: string) => {
+    const s = String(v ?? '')
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+    return COLORS[h % COLORS.length]
+  }
   const wrap = (v: any) => {
     const s = String(v ?? '')
     const limit = isMobile ? 28 : 40
@@ -25,11 +31,11 @@ export function ContentSummaryChart() {
   const processed = useMemo(() => {
     const items = (data || [])
     const total = items.reduce((s, d) => s + d.value, 0)
-    const chartData = items.map((item, idx) => ({
+    const chartData = items.map((item) => ({
       fullName: item.name,
       value: item.value,
       percentage: total > 0 ? ((item.value / total) * 100).toFixed(1) : '0.0',
-      color: COLORS[idx % COLORS.length]
+      color: colorFor(item.name)
     }))
     const longest = chartData.reduce((m, d) => Math.max(m, d.fullName.length), 0)
     const charW = isMobile ? 7 : 8

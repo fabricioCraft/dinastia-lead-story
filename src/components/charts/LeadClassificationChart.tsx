@@ -48,6 +48,12 @@ export function LeadClassificationChart() {
     }))
 
   const total = baseData.reduce((sum, i) => sum + i.value, 0)
+  const colorFor = (v: string) => {
+    const s = String(v ?? '')
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+    return COLORS[h % COLORS.length]
+  }
   const chartData = baseData.map(i => ({
     ...i,
     percentage: total > 0 ? Number(((i.value / total) * 100).toFixed(1)) : 0
@@ -88,7 +94,7 @@ export function LeadClassificationChart() {
               if (name) setCategoricalFilter('classification', String(name))
             }}>
               {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                <Cell key={`cell-${index}`} fill={colorFor(entry.name)} />
               ))}
             </Bar>
             <Line yAxisId="right" type="monotone" dataKey="percentage" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
