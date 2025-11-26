@@ -261,21 +261,16 @@ export class DashboardService {
       `;
     }
 
-    try {
-      const { data, error } = await client.rpc('execute_sql', { query: sql });
-      if (!error && Array.isArray(data)) {
-        return (data || []).map((row: any) => ({ name: row.name, value: parseInt(row.value, 10) }));
-      }
-    } catch (_) { }
+    
 
     const counts = new Map<string, number>();
-    const pageSize = 2000;
+    const pageSize = 1000;
     let from = 0;
     let hasMore = true;
     while (hasMore) {
       let query: any = client
         .from('leads2')
-        .select(`${column}, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por`);
+        .select(`${column}, datacriacao, utm_campaign, utm_source, utm_content, classificacao_do_lead, agendado_por, origem`);
       if (typeof days === 'number' && days > 0) {
         const now = new Date();
         const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -291,13 +286,39 @@ export class DashboardService {
         throw new Error(error.message);
       }
       const rows: any[] = data || [];
+      const normalizeOrigin = (origin: string | null | undefined): string => {
+        if (!origin || origin.trim() === '') return 'Sem Origem';
+        const normalized = origin.toLowerCase().trim();
+        if (normalized.includes('isca') && normalized.includes('scopeline')) return 'Isca Scopeline';
+        if (normalized.includes('isca') && normalized.includes('hormozi')) return 'Isca Hormozi';
+        if (normalized.includes('masterclass')) return 'Masterclass';
+        if (normalized.includes('manychat')) return 'Manychat';
+        if (normalized.includes('starter10k')) return 'Starter10k';
+        if (normalized.includes('agendamento')) return 'Agendamento';
+        if (normalized.includes('desafio')) return 'Desafio';
+        if (normalized.includes('youtube') || normalized.includes('yt-')) return 'YouTube';
+        if (normalized.includes('calendly')) return 'Calendly';
+        if (normalized.includes('venda')) return 'Venda';
+        if (normalized.includes('google ads') || normalized.includes('google')) return 'Google Ads';
+        if (normalized.includes('facebook') || normalized.includes('meta')) return 'Facebook Ads';
+        if (normalized.includes('instagram')) return 'Instagram';
+        if (normalized.includes('linkedin')) return 'LinkedIn';
+        if (normalized.includes('tiktok')) return 'TikTok';
+        if (normalized.includes('whatsapp')) return 'WhatsApp';
+        if (normalized.includes('email')) return 'Email Marketing';
+        return 'Outros';
+      };
       for (const row of rows) {
         // Aplicar filtros manualmente no fallback
         if (filters) {
-          if (filters.source && row.utm_source !== filters.source) continue;
-          if (filters.content && row.utm_content !== filters.content) continue;
-          if (filters.classification && row.classificacao_do_lead !== filters.classification) continue;
+          if (filters.source && String(row.utm_source || '').trim() !== String(filters.source).trim()) continue;
+          if (filters.content && String(row.utm_content || '').trim() !== String(filters.content).trim()) continue;
+          if (filters.classification && String(row.classificacao_do_lead || '').trim() !== String(filters.classification).trim()) continue;
           if (filters.scheduler && row.agendado_por !== filters.scheduler) continue;
+          if (filters.origin) {
+            const o = normalizeOrigin(row.origem);
+            if (o !== filters.origin) continue;
+          }
 
           if (filters.campaign) {
             let camp = row.utm_campaign || '';
